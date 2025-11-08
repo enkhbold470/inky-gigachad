@@ -1,0 +1,127 @@
+---
+alwaysApply: true
+---
+
+# Testing and Quality Assurance Rules
+
+## Testing Strategy
+
+### Testing Framework
+- Use Vitest for unit and integration tests (lightweight, fast, ESM support)
+- Use Playwright or React Testing Library for component tests if needed
+- Keep tests simple and focused on behavior, not implementation
+
+### Test File Organization
+- Co-locate test files with source files: `component.test.ts` next to `component.tsx`
+- Or organize in `__tests__` directories: `__tests__/component.test.ts`
+- Use `.test.ts` or `.spec.ts` extension
+
+### Testing Patterns
+
+#### Server Actions Testing
+- Test with mocked Prisma client
+- Test input validation (Zod schemas)
+- Test error handling
+- Test successful operations
+- Example:
+```typescript
+import { describe, it, expect, vi } from "vitest"
+import { createUserAction } from "./actions"
+import { prisma } from "@/lib/prisma"
+
+vi.mock("@/lib/prisma", () => ({
+  prisma: {
+    user: {
+      create: vi.fn(),
+    },
+  },
+}))
+
+describe("createUserAction", () => {
+  it("should validate input", async () => {
+    const result = await createUserAction({ email: "invalid", name: "" })
+    expect(result.success).toBe(false)
+    expect(result.error).toContain("email")
+  })
+  
+  it("should create user successfully", async () => {
+    const mockUser = { id: "1", email: "test@example.com", name: "Test" }
+    vi.mocked(prisma.user.create).mockResolvedValue(mockUser)
+    
+    const result = await createUserAction({
+      email: "test@example.com",
+      name: "Test",
+    })
+    
+    expect(result.success).toBe(true)
+    expect(result.data).toEqual(mockUser)
+  })
+})
+```
+
+#### API Route Testing
+- Test with mocked dependencies
+- Test request validation
+- Test authentication/authorization
+- Test error responses
+- Test success responses
+
+#### Component Testing (if using React Testing Library)
+- Test user interactions, not implementation
+- Use accessible queries (getByRole, getByLabelText)
+- Test loading and error states
+- Avoid testing implementation details
+
+### Test Quality Guidelines
+- Write tests before or alongside code (TDD/BDD when possible)
+- Keep tests independent and isolated
+- Use descriptive test names: `describe("feature", () => { it("should do X when Y", ...) })`
+- Mock external dependencies (database, APIs, file system)
+- Test edge cases and error conditions
+- Aim for high coverage of critical paths, not 100% coverage
+
+### Code Quality
+
+#### Linting
+- Use ESLint with TypeScript rules
+- Run linting before committing: `pnpm lint`
+- Fix all linting errors before pushing code
+- Use ESLint auto-fix when safe: `pnpm lint --fix`
+
+#### Type Checking
+- Ensure TypeScript compiles without errors: `pnpm tsc --noEmit`
+- Don't use `@ts-ignore` or `@ts-expect-error` without justification
+- Prefer type-safe patterns over type assertions
+- Use `unknown` before casting to specific types
+
+#### Code Review Checklist
+- [ ] Code follows project style guidelines
+- [ ] All tests pass
+- [ ] No linting errors
+- [ ] TypeScript types are correct
+- [ ] Error handling is implemented
+- [ ] Input validation is present
+- [ ] No sensitive data is logged or exposed
+- [ ] Database queries are optimized
+- [ ] No hardcoded values (use env vars or config)
+
+### Pre-commit Checks
+- Run linting: `pnpm lint`
+- Run type checking: `pnpm tsc --noEmit`
+- Run tests: `pnpm test` (if test suite exists)
+- Don't commit if any checks fail
+
+### Performance Testing
+- Monitor bundle size for client-side code
+- Profile slow database queries
+- Use Next.js built-in performance metrics
+- Monitor API response times
+- Test with realistic data volumes
+
+### Accessibility Testing
+- Use automated tools (axe, Lighthouse) in CI/CD
+- Test keyboard navigation
+- Test screen reader compatibility
+- Ensure proper ARIA labels and roles
+- Verify color contrast ratios
+- Test with actual assistive technologies when possible

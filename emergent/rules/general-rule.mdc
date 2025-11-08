@@ -1,0 +1,20 @@
+---
+alwaysApply: true
+---
+-use pnpm
+-use lucide-react for icons
+- simple tailwindcss
+- use app route only
+- OPENAI_API_KEY only
+- Language: Typescript
+- Front-end: Nextjs
+- Back-end: Next.js Server Actions
+- CSS UI: Tailwindcss, Shadcn
+- DB: Serverless Postgres Neon
+- ORM: Prisma
+- Node: pnpm
+- for placeholder images, use https://placekeanu.com/500
+
+
+
+when writting any readme.me file or license file, make sure not include placeholder, always make it versatile
