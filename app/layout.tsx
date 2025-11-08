@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import { Toaster } from "sonner";
+import { EmergentLogo } from "@/components/emergent-logo";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -17,6 +18,17 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Inky - Memory Layer for Personalized Coding",
   description: "Personalized coding memory layer with GitHub integration",
+  icons: {
+    icon: "/logo.jpg",
+    apple: "/logo.jpg",
+  },
+  openGraph: {
+    images: ["/logo.jpg"],
+  },
+  twitter: {
+    card: "summary",
+    images: ["/logo.jpg"],
+  },
 };
 
 export default function RootLayout({
@@ -39,6 +51,7 @@ export default function RootLayout({
         >
           {children}
           <Toaster />
+          <EmergentLogo />
         </body>
       </html>
     </ClerkProvider>

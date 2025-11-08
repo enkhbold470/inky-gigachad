@@ -1,14 +1,18 @@
 import { SignUp } from "@clerk/nextjs"
-import { Code } from "lucide-react"
+import Image from "next/image"
 
 export default function SignUpPage() {
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-black flex flex-col items-center justify-center p-4">
       <div className="mb-8 text-center space-y-2">
         <div className="flex items-center justify-center gap-2">
-          <div className="size-10 bg-primary rounded-md flex items-center justify-center">
-            <Code className="size-6 text-primary-foreground" />
-          </div>
+          <Image
+            src="/logo.jpg"
+            alt="Inky"
+            width={40}
+            height={40}
+            className="sign-up-logo"
+          />
           <span className="font-mono text-2xl font-semibold">Inky</span>
         </div>
         <p className="text-sm text-muted-foreground max-w-md">
