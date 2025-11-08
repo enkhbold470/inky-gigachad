@@ -1,0 +1,153 @@
+---
+alwaysApply: true
+---
+
+# Prisma ORM and Data Validation Rules
+
+## Prisma Best Practices
+
+### Connection Pooling
+- Use connection pooling for serverless environments (Neon Postgres handles this automatically)
+- Configure Prisma Client with appropriate connection pool settings
+- Use `prisma.$connect()` sparingly; let Prisma manage connections automatically
+- Close connections gracefully in edge cases only
+
+### Transaction Handling
+- Use transactions for operations that must be atomic
+- Keep transactions short-lived to avoid connection pool exhaustion
+- Example pattern:
+```typescript
+import { prisma } from "@/lib/prisma"
+
+await prisma.$transaction(async (tx) => {
+  const user = await tx.user.create({ data: userData })
+  await tx.profile.create({ data: { userId: user.id, ...profileData } })
+  return user
+})
+```
+
+### Query Patterns
+- Always use `select` to limit fields returned from database
+- Use `include` judiciously; avoid deeply nested includes that cause N+1 queries
+- Use `findUnique` with unique fields; use `findFirst` with non-unique fields
+- Always handle null cases when using `findUnique` or `findFirst`
+- Use `findMany` with pagination (skip/take) for lists
+- Use database indexes for frequently queried fields
+
+### Error Handling
+- Handle Prisma errors gracefully:
+  - `P2002`: Unique constraint violation
+  - `P2025`: Record not found
+  - `P2003`: Foreign key constraint violation
+- Wrap Prisma queries in try-catch blocks
+- Never expose Prisma error messages directly to clients
+
+### Example Safe Query Pattern
+```typescript
+import { prisma } from "@/lib/prisma"
+import { z } from "zod"
+
+const schema = z.object({
+  email: z.string().email(),
+  name: z.string().min(1),
+})
+
+export async function createUser(data: unknown) {
+  try {
+    const validated = schema.parse(data)
+    
+    const user = await prisma.user.create({
+      data: validated,
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        createdAt: true,
+      },
+    })
+    
+    return { success: true, data: user }
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return { success: false, error: "Validation failed", details: error.errors }
+    }
+    
+    // Handle Prisma errors
+    if (error?.code === "P2002") {
+      return { success: false, error: "Email already exists" }
+    }
+    
+    console.error("Database error:", error)
+    return { success: false, error: "Failed to create user" }
+  }
+}
+```
+
+## Data Validation Strategy
+
+### When to Validate
+1. **API Routes**: Always validate on entry with Zod
+2. **Server Actions**: Always validate inputs with Zod
+3. **Form Submissions**: Validate client-side for UX, but always re-validate server-side
+4. **Database Queries**: Validate parameters before querying (IDs, filters, etc.)
+
+### Validation Layers
+1. **Schema Definition**: Define Zod schemas in shared location (`lib/validations/`)
+2. **Type Generation**: Export TypeScript types from Zod schemas: `z.infer<typeof schema>`
+3. **Reuse Schemas**: Reuse schemas across API routes and Server Actions
+
+### Validation Pattern
+```typescript
+// lib/validations/user.ts
+import { z } from "zod"
+
+export const createUserSchema = z.object({
+  email: z.string().email("Invalid email address"),
+  name: z.string().min(1, "Name is required").max(100),
+  age: z.number().int().min(0).optional(),
+})
+
+export type CreateUserInput = z.infer<typeof createUserSchema>
+
+// Usage in Server Action
+import { createUserSchema, type CreateUserInput } from "@/lib/validations/user"
+
+export async function createUserAction(input: CreateUserInput) {
+  const validated = createUserSchema.parse(input) // Throws if invalid
+  // ... use validated data
+}
+```
+
+### Database Column Naming
+- Use `snake_case` for all database columns (as per project rules)
+- Map to camelCase in Prisma schema if preferred in application code
+- Example:
+```prisma
+model User {
+  id        String   @id @default(cuid())
+  first_name String  @map("first_name") // Database: snake_case
+  createdAt DateTime @default(now()) @map("created_at")
+  
+  @@map("users")
+}
+```
+
+### Type Safety with Prisma
+- Always use Prisma generated types for database models
+- Use `Prisma.UserCreateInput`, `Prisma.UserUpdateInput`, etc.
+- Combine with Zod for runtime validation when accepting external input
+- Never use `any` or `unknown` without proper validation
+
+### Query Optimization
+- Use `select` to fetch only needed fields
+- Use `include` for relations, but be mindful of depth
+- Implement pagination with `skip` and `take`
+- Use database indexes for frequently queried columns
+- Avoid `select *` in production queries
+- Use `findUnique` over `findFirst` when possible (uses indexes)
+
+### Database Migrations
+- Never run `npx prisma db push` in production (as per safety rules)
+- Use `prisma migrate dev` for development
+- Review migration files before applying
+- Test migrations on staging before production

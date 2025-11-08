@@ -1,0 +1,157 @@
+---
+alwaysApply: true
+---
+
+# Security and Error Handling Rules
+
+## Error Handling Patterns
+
+### Server Actions
+- Always use typed error responses with consistent structure: `{ success: boolean, error?: string, data?: T }`
+- Wrap all Server Actions in try-catch blocks
+- Never expose internal error details to clients; log full errors server-side
+- Use Zod for input validation; return validation errors in consistent format
+- Example pattern:
+```typescript
+"use server"
+import { z } from "zod"
+
+const schema = z.object({ name: z.string().min(1) })
+
+export async function myAction(formData: FormData) {
+  try {
+    const validated = schema.parse({ name: formData.get("name") })
+    // ... business logic
+    return { success: true, data: result }
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return { success: false, error: error.errors[0].message }
+    }
+    console.error("Action error:", error)
+    return { success: false, error: "An error occurred" }
+  }
+}
+```
+
+### API Routes
+- Always return consistent error response format: `{ error: string, statusCode: number }`
+- Use appropriate HTTP status codes (400, 401, 403, 404, 500)
+- Never expose stack traces or internal details in production
+- Validate all inputs with Zod before processing
+- Example pattern:
+```typescript
+import { NextResponse } from "next/server"
+import { z } from "zod"
+
+const schema = z.object({ email: z.string().email() })
+
+export async function POST(req: Request) {
+  try {
+    const body = await req.json()
+    const validated = schema.parse(body)
+    // ... process
+    return NextResponse.json({ success: true, data: result })
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: error.errors[0].message },
+        { status: 400 }
+      )
+    }
+    console.error("API error:", error)
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    )
+  }
+}
+```
+
+### Client Components
+- Use error boundaries for error handling in React components
+- Handle loading and error states explicitly
+- Show user-friendly error messages
+- Log errors to monitoring service if available
+
+## Logging Strategy
+
+- Use structured logging with context (userId, requestId, etc.)
+- Log at appropriate levels: error, warn, info, debug
+- Never log sensitive data (passwords, tokens, PII)
+- Log all errors with full context for debugging
+- Use console.error for errors, console.warn for warnings
+- Consider implementing request ID tracking for debugging
+
+## Environment Variable Validation
+
+- Always validate environment variables at application startup
+- Use Zod schema to validate and type environment variables
+- Fail fast if required environment variables are missing
+- Create a `lib/env.ts` file for centralized env validation:
+```typescript
+import { z } from "zod"
+
+const envSchema = z.object({
+  OPENAI_API_KEY: z.string().min(1),
+  DATABASE_URL: z.string().url().optional(),
+  NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
+})
+
+export const env = envSchema.parse(process.env)
+```
+
+## API Security
+
+### Rate Limiting
+- Implement rate limiting on all API routes and Server Actions
+- Use reasonable limits (e.g., 10 requests per minute per IP for AI endpoints)
+- Return 429 status code when rate limit exceeded
+- Log rate limit violations
+
+### Input Sanitization
+- Always validate AND sanitize user inputs
+- Use Zod for validation, sanitize with appropriate libraries for XSS prevention
+- Never trust client-side validation alone
+- Sanitize HTML content if allowing user-generated HTML
+- Escape user input when displaying in UI
+
+### Request Security
+- Set appropriate request size limits (e.g., 1MB for JSON, 10MB for file uploads)
+- Validate Content-Type headers
+- Implement CORS properly if needed (default Next.js CORS is usually sufficient)
+- Use HTTPS in production (enforced by hosting platform)
+
+### Authentication/Authorization
+- If using Clerk, protect routes with middleware
+- Verify authentication in Server Actions before processing
+- Check authorization/permissions before accessing resources
+- Never trust client-side auth state; always verify server-side
+
+## File Upload Security (if applicable)
+
+- Validate file types (whitelist, not blacklist)
+- Enforce file size limits
+- Scan uploaded files for malware if handling user uploads
+- Store uploaded files outside public directory initially
+- Rename files to prevent path traversal attacks
+- Serve files through API routes, not direct public access
+
+## Error Response Format
+
+All API errors should follow this structure:
+```typescript
+{
+  success: false,
+  error: "Human-readable error message",
+  code?: "ERROR_CODE", // Optional error code for client handling
+  details?: object // Optional additional details (dev only)
+}
+```
+
+All successful responses:
+```typescript
+{
+  success: true,
+  data: T // The actual response data
+}
+```
