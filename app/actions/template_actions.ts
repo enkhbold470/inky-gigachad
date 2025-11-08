@@ -49,7 +49,7 @@ export async function createTemplate(input: z.infer<typeof createTemplateSchema>
     return { success: true, data: template }
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return { success: false, error: "Validation failed", details: error.errors }
+      return { success: false, error: "Validation failed", details: error.issues }
     }
     console.error("Error creating template:", error)
     return { success: false, error: error instanceof Error ? error.message : "Failed to create template" }
