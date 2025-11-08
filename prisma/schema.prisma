@@ -1,0 +1,125 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../lib/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String       @id @default(cuid())
+  clerk_id      String       @unique
+  github_username String?
+  created_at    DateTime     @default(now())
+  updated_at    DateTime     @updatedAt
+
+  repositories  Repository[]
+  rules         Rule[]
+  sessions      CodingSession[]
+
+  @@map("users")
+}
+
+model Repository {
+  id            String       @id @default(cuid())
+  user_id       String
+  github_id     Int          @unique
+  name          String
+  full_name     String
+  owner         String
+  description   String?
+  language      String?
+  stars         Int          @default(0)
+  is_private    Boolean      @default(false)
+  html_url      String
+  is_active     Boolean      @default(false)
+  created_at    DateTime     @default(now())
+  updated_at    DateTime     @updatedAt
+
+  user          User         @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  sessions      CodingSession[]
+
+  @@index([user_id])
+  @@index([github_id])
+  @@map("repositories")
+}
+
+model RuleTemplate {
+  id            String       @id @default(cuid())
+  name          String       @unique
+  description   String?
+  content       String       @db.Text
+  category      String?
+  is_public     Boolean      @default(true)
+  created_at    DateTime     @default(now())
+  updated_at    DateTime     @updatedAt
+
+  @@map("rule_templates")
+}
+
+model Rule {
+  id            String       @id @default(cuid())
+  user_id       String
+  repository_id String?
+  name          String
+  content       String       @db.Text
+  version       Int          @default(1)
+  parent_rule_id String?     // For versioning - points to previous version
+  pinecone_id   String?      // Vector ID in Pinecone
+  is_active     Boolean      @default(true)
+  created_at    DateTime     @default(now())
+  updated_at    DateTime     @updatedAt
+
+  user          User         @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  sessions      CodingSessionRule[]
+
+  @@index([user_id])
+  @@index([repository_id])
+  @@index([parent_rule_id])
+  @@map("rules")
+}
+
+model CodingSession {
+  id            String       @id @default(cuid())
+  user_id       String
+  repository_id String?
+  title         String
+  description   String?
+  context       String?      @db.Text // Additional context for the session
+  started_at    DateTime     @default(now())
+  ended_at      DateTime?
+  is_active     Boolean      @default(true)
+  created_at    DateTime     @default(now())
+  updated_at    DateTime     @updatedAt
+
+  user          User         @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  repository    Repository?  @relation(fields: [repository_id], references: [id], onDelete: SetNull)
+  rules         CodingSessionRule[]
+
+  @@index([user_id])
+  @@index([repository_id])
+  @@index([is_active])
+  @@map("coding_sessions")
+}
+
+model CodingSessionRule {
+  id              String       @id @default(cuid())
+  session_id      String
+  rule_id         String
+  relevance_score Float?       // Score from vector search
+  created_at      DateTime     @default(now())
+
+  session         CodingSession @relation(fields: [session_id], references: [id], onDelete: Cascade)
+  rule            Rule          @relation(fields: [rule_id], references: [id], onDelete: Cascade)
+
+  @@unique([session_id, rule_id])
+  @@index([session_id])
+  @@index([rule_id])
+  @@map("coding_session_rules")
+}
+
