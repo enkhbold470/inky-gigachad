@@ -65,7 +65,6 @@ export async function createSession(input: CreateSessionInput) {
               data: {
                 session_id: session.id,
                 rule_id: rule.id,
-                relevance_score: rule.relevance_score,
               },
             })
           )
@@ -76,7 +75,7 @@ export async function createSession(input: CreateSessionInput) {
     return { success: true, data: session }
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return { success: false, error: "Validation failed", details: error.errors }
+      return { success: false, error: "Validation failed", details: error.issues }
     }
     console.error("Error creating session:", error)
     return { success: false, error: error instanceof Error ? error.message : "Failed to create session" }
@@ -146,7 +145,6 @@ export async function updateSession(input: UpdateSessionInput) {
                 data: {
                   session_id: session.id,
                   rule_id: rule.id,
-                  relevance_score: rule.relevance_score,
                 },
               })
             )
@@ -158,7 +156,7 @@ export async function updateSession(input: UpdateSessionInput) {
     return { success: true, data: session }
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return { success: false, error: "Validation failed", details: error.errors }
+      return { success: false, error: "Validation failed", details: error.issues }
     }
     console.error("Error updating session:", error)
     return { success: false, error: error instanceof Error ? error.message : "Failed to update session" }

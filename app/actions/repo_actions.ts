@@ -105,7 +105,7 @@ export async function saveRepository(repo: GitHubRepo) {
     return { success: true, data: newRepo }
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return { success: false, error: "Validation failed", details: error.errors }
+      return { success: false, error: "Validation failed", details: error.issues }
     }
     console.error("Error saving repository:", error)
     return { success: false, error: error instanceof Error ? error.message : "Failed to save repository" }
