@@ -63,7 +63,7 @@ export async function indexMarkdownFilesToPinecone(
   userId: string,
   repositoryIds: string[]
 ): Promise<{ indexed: number; failed: number }> {
-  const index = await getPineconeIndex()
+  const index = await getPineconeIndex(undefined, userId)
   let indexed = 0
   let failed = 0
 
@@ -136,7 +136,7 @@ export async function generateRulesWithRAG(
   topK: number = 10
 ): Promise<string> {
   const { generateEmbedding } = await import("@/lib/embeddings")
-  const index = await getPineconeIndex()
+  const index = await getPineconeIndex(undefined, userId)
   const OpenAI = (await import("openai")).default
 
   // Generate embedding for the query

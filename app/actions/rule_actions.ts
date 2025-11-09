@@ -74,7 +74,7 @@ export async function createRule(input: CreateRuleInput) {
     console.log("[createRule] Indexing rule in Pinecone...")
     try {
       const embedding = await generateEmbedding(`${validated.name}\n${validated.content}`)
-      const index = await getPineconeIndex()
+      const index = await getPineconeIndex(undefined, user.id)
       const pineconeId = `rule_${rule.id}`
       
       await index.upsert([
@@ -168,7 +168,7 @@ export async function updateRule(input: UpdateRuleInput) {
     // Index updated rule in Pinecone
     try {
       const embedding = await generateEmbedding(`${updatedName}\n${updatedContent}`)
-      const index = await getPineconeIndex()
+      const index = await getPineconeIndex(undefined, user.id)
       const pineconeId = `rule_${newRule.id}`
       
       await index.upsert([
@@ -333,7 +333,7 @@ export async function deleteRule(ruleId: string) {
     if (rule.pinecone_id) {
       console.log("[deleteRule] Deleting from Pinecone...")
       try {
-        const index = await getPineconeIndex()
+        const index = await getPineconeIndex(undefined, user.id)
         await index.deleteOne(rule.pinecone_id)
         console.log("[deleteRule] ✅ Deleted from Pinecone")
       } catch (error) {
@@ -382,7 +382,7 @@ export async function searchRules(query: string, repositoryId?: string, topK: nu
       const queryEmbedding = await generateEmbedding(query)
       
       console.log("[searchRules] Searching in Pinecone...")
-      const index = await getPineconeIndex()
+      const index = await getPineconeIndex(undefined, user.id)
       const searchResults = await index.query({
         vector: queryEmbedding,
         topK,
