@@ -222,7 +222,7 @@ export default function Dashboard() {
               command: "npx",
               args: ["-y", "inky-mcp-server"],
               env: {
-                API_KEY: result.data.token,
+                USER_ID: result.data.userId,
                 INKY_API_URL: baseUrl,
               },
             },

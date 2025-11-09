@@ -1,20 +1,17 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { hashToken } from "@/lib/mcp-token"
 
 /**
- * Authenticate user from MCP token
+ * Authenticate user from userId header
  */
-async function authenticateUser(token: string) {
-  if (!token || !token.startsWith("inky_")) {
+async function authenticateUser(userId: string) {
+  if (!userId) {
     return null
   }
 
-  const tokenHash = hashToken(token)
-
-  // Find user by token hash
+  // Find user by clerk_id
   const user = await prisma.user.findUnique({
-    where: { mcp_access_token: tokenHash },
+    where: { clerk_id: userId },
     select: { id: true },
   })
 
@@ -27,29 +24,24 @@ async function authenticateUser(token: string) {
  */
 export async function GET(req: Request) {
   try {
-    // Extract token from Authorization header or query parameter
-    const authHeader = req.headers.get("Authorization")
-    const tokenFromHeader = authHeader?.startsWith("Bearer ")
-      ? authHeader.substring(7)
-      : null
-    const tokenFromQuery = new URL(req.url).searchParams.get("token")
-    const token = tokenFromHeader || tokenFromQuery
+    // Extract userId from X-User-Id header
+    const userId = req.headers.get("X-User-Id")
 
-    if (!token) {
+    if (!userId) {
       return NextResponse.json(
         {
           jsonrpc: "2.0",
           error: {
             code: -32001,
             message: "Unauthorized",
-            data: "Missing access token",
+            data: "Missing user ID",
           },
         },
         { status: 401 }
       )
     }
 
-    const user = await authenticateUser(token)
+    const user = await authenticateUser(userId)
     if (!user) {
       return NextResponse.json(
         {
@@ -57,7 +49,7 @@ export async function GET(req: Request) {
           error: {
             code: -32001,
             message: "Unauthorized",
-            data: "Invalid access token",
+            data: "Invalid user ID",
           },
         },
         { status: 401 }
@@ -134,24 +126,24 @@ export async function GET(req: Request) {
  */
 export async function POST(req: Request) {
   try {
-    // Extract token from Authorization header
-    const authHeader = req.headers.get("Authorization")
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    // Extract userId from X-User-Id header
+    const userId = req.headers.get("X-User-Id")
+    
+    if (!userId) {
       return NextResponse.json(
         {
           jsonrpc: "2.0",
           error: {
             code: -32001,
             message: "Unauthorized",
-            data: "Missing or invalid Authorization header",
+            data: "Missing or invalid X-User-Id header",
           },
         },
         { status: 401 }
       )
     }
 
-    const token = authHeader.substring(7) // Remove "Bearer " prefix
-    const user = await authenticateUser(token)
+    const user = await authenticateUser(userId)
 
     if (!user) {
       return NextResponse.json(
@@ -160,7 +152,7 @@ export async function POST(req: Request) {
           error: {
             code: -32001,
             message: "Unauthorized",
-            data: "Invalid access token",
+            data: "Invalid user ID",
           },
         },
         { status: 401 }

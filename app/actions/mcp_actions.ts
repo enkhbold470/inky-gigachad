@@ -2,7 +2,7 @@
 
 import { auth } from "@clerk/nextjs/server"
 import { prisma } from "@/lib/prisma"
-import { generateMCPToken, hashToken } from "@/lib/mcp-token"
+import { generateMCPToken, hashToken, encryptToken, decryptToken } from "@/lib/mcp-token"
 
 /**
  * Get or create user in database
@@ -23,6 +23,7 @@ async function getOrCreateUser(clerkId: string) {
 
 /**
  * Generate a new MCP access token for the authenticated user
+ * This creates a permanent token that can be retrieved later
  */
 export async function generateMCPAccessToken() {
   try {
@@ -36,12 +37,14 @@ export async function generateMCPAccessToken() {
     // Generate new token
     const token = generateMCPToken()
     const tokenHash = hashToken(token)
+    const encryptedToken = encryptToken(token)
 
-    // Store hashed token in database
+    // Store both hashed (for verification) and encrypted (for retrieval) tokens
     await prisma.user.update({
       where: { id: user.id },
       data: {
         mcp_access_token: tokenHash,
+        mcp_token_encrypted: encryptedToken,
         mcp_token_created_at: new Date(),
       },
     })
@@ -58,8 +61,7 @@ export async function generateMCPAccessToken() {
 
 /**
  * Get MCP server configuration JSON for the authenticated user
- * Generates a token if one doesn't exist
- * Note: If a token already exists, it will be regenerated (since we can't retrieve the original)
+ * Uses userId for authentication instead of API tokens
  */
 export async function getMCPConfig() {
   try {
@@ -69,20 +71,6 @@ export async function getMCPConfig() {
     }
 
     const user = await getOrCreateUser(userId)
-
-    // Generate a new token (we can't retrieve the original from hash)
-    // In production, you might want to store encrypted tokens or use JWT
-    const token = generateMCPToken()
-    const tokenHash = hashToken(token)
-
-    // Store hashed token in database
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        mcp_access_token: tokenHash,
-        mcp_token_created_at: new Date(),
-      },
-    })
 
     // Get the base URL for the API
     // Priority: NEXT_PUBLIC_APP_URL > VERCEL_URL > fallback
@@ -104,12 +92,12 @@ export async function getMCPConfig() {
             inky: {
               url: `${baseUrl}/api/mcp`,
               headers: {
-                Authorization: `Bearer ${token}`,
+                "X-User-Id": userId,
               },
             },
           },
         },
-        token,
+        userId,
         apiUrl: `${baseUrl}/api/mcp`,
       },
     }
@@ -124,7 +112,7 @@ export async function getMCPConfig() {
 
 /**
  * Get current MCP access token (if exists)
- * Returns null if no token exists
+ * Returns the actual token if available
  */
 export async function getCurrentMCPToken() {
   try {
@@ -135,18 +123,31 @@ export async function getCurrentMCPToken() {
 
     const user = await getOrCreateUser(userId)
 
-    if (!user.mcp_access_token) {
+    if (!user.mcp_token_encrypted) {
       return { success: true, data: { token: null, hasToken: false } }
     }
 
-    // We can't retrieve the original token from hash, so we indicate it exists
-    return {
-      success: true,
-      data: {
-        token: null, // Original token cannot be retrieved
-        hasToken: true,
-        createdAt: user.mcp_token_created_at,
-      },
+    try {
+      // Decrypt and return the token
+      const token = decryptToken(user.mcp_token_encrypted)
+      return {
+        success: true,
+        data: {
+          token,
+          hasToken: true,
+          createdAt: user.mcp_token_created_at,
+        },
+      }
+    } catch (error) {
+      console.error("[getCurrentMCPToken] Failed to decrypt token:", error)
+      return {
+        success: true,
+        data: {
+          token: null,
+          hasToken: false,
+          error: "Failed to decrypt token",
+        },
+      }
     }
   } catch (error) {
     console.error("[getCurrentMCPToken] Error:", error)
@@ -174,6 +175,7 @@ export async function revokeMCPToken() {
       where: { id: user.id },
       data: {
         mcp_access_token: null,
+        mcp_token_encrypted: null,
         mcp_token_created_at: null,
       },
     })
