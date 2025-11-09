@@ -258,3 +258,132 @@ export function hasNeuroFocusTag(commitMessage: string): boolean {
   return /\#neurofocus/i.test(commitMessage)
 }
 
+/**
+ * Fetch markdown files from a GitHub repository
+ */
+export async function fetchMarkdownFilesFromRepo(
+  owner: string,
+  repo: string
+): Promise<Array<{ path: string; content: string; size: number }>> {
+  const token = await getGitHubAccessToken()
+  
+  if (!token) {
+    throw new Error("GitHub access token not found")
+  }
+
+  try {
+    // Get repository info to find default branch
+    const repoResponse = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/vnd.github.v3+json",
+        },
+        next: { revalidate: 300 },
+      }
+    )
+
+    if (!repoResponse.ok) {
+      throw new Error(`GitHub API error: ${repoResponse.statusText}`)
+    }
+
+    const repoData = await repoResponse.json()
+    const defaultBranch = repoData.default_branch || "main"
+
+    // Get recursive tree to find all markdown files
+    const treeResponse = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/git/trees/${defaultBranch}?recursive=1`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/vnd.github.v3+json",
+        },
+        next: { revalidate: 300 },
+      }
+    )
+
+    if (!treeResponse.ok) {
+      throw new Error(`GitHub API error: ${treeResponse.statusText}`)
+    }
+
+    const treeData = await treeResponse.json()
+    
+    // Check if tree was truncated (GitHub API limitation)
+    if (treeData.truncated) {
+      console.warn(`[fetchMarkdownFilesFromRepo] Tree was truncated for ${owner}/${repo}. Some files may be missing.`)
+      // For truncated trees, we might need to use a different approach (e.g., search API)
+      // For now, we'll proceed with what we have
+    }
+    
+    console.log(`[fetchMarkdownFilesFromRepo] Tree contains ${treeData.tree?.length || 0} total files`)
+    
+    // Filter for markdown files
+    const allBlobs = (treeData.tree || []).filter((file: { type: string }) => file.type === "blob")
+    const markdownBlobs = allBlobs.filter(
+      (file: { path: string }) => file.path.endsWith(".md") || file.path.endsWith(".mdc")
+    )
+    
+    console.log(`[fetchMarkdownFilesFromRepo] Found ${markdownBlobs.length} markdown files before exclusions`)
+    
+    const markdownFiles = markdownBlobs.filter(
+      (file: { path: string; type: string; size?: number }) =>
+        !file.path.includes("node_modules") &&
+        !file.path.includes(".next") &&
+        !file.path.includes(".git")
+    )
+    
+    console.log(`[fetchMarkdownFilesFromRepo] Found ${markdownFiles.length} markdown files after filtering`)
+    console.log(`[fetchMarkdownFilesFromRepo] Markdown files:`, markdownFiles.map((f: { path: string }) => f.path).join(", "))
+
+    // Fetch content for each markdown file
+    const filesWithContent: Array<{ path: string; content: string; size: number }> = []
+    let successCount = 0
+    let errorCount = 0
+    
+    for (const file of markdownFiles) {
+      try {
+        const contentResponse = await fetch(
+          `https://api.github.com/repos/${owner}/${repo}/contents/${encodeURIComponent(file.path)}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: "application/vnd.github.v3+json",
+            },
+            next: { revalidate: 300 },
+          }
+        )
+
+        if (contentResponse.ok) {
+          const contentData = await contentResponse.json()
+          if (contentData.encoding === "base64" && contentData.content) {
+            const content = Buffer.from(contentData.content, "base64").toString("utf-8")
+            filesWithContent.push({
+              path: file.path,
+              content,
+              size: contentData.size || file.size || 0,
+            })
+            successCount++
+          } else {
+            console.warn(`[fetchMarkdownFilesFromRepo] File ${file.path} has unexpected encoding: ${contentData.encoding}`)
+            errorCount++
+          }
+        } else {
+          console.warn(`[fetchMarkdownFilesFromRepo] Failed to fetch ${file.path}: ${contentResponse.status} ${contentResponse.statusText}`)
+          errorCount++
+        }
+      } catch (error) {
+        console.error(`[fetchMarkdownFilesFromRepo] Error fetching file ${file.path}:`, error)
+        errorCount++
+        // Continue with other files
+      }
+    }
+
+    console.log(`[fetchMarkdownFilesFromRepo] Successfully fetched ${successCount} files, ${errorCount} errors`)
+    return filesWithContent
+  } catch (error) {
+    console.error(`Error fetching markdown files from ${owner}/${repo}:`, error)
+    throw error
+  }
+}
+
