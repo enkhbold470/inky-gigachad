@@ -3,7 +3,7 @@
 import { auth } from "@clerk/nextjs/server"
 import { prisma } from "@/lib/prisma"
 import { generateEmbedding } from "@/lib/embeddings"
-import { getPineconeIndex } from "@/lib/pinecone"
+import { getPineconeIndex, getUserPineconeNamespace } from "@/lib/pinecone"
 import { createRuleSchema, updateRuleSchema, type CreateRuleInput, type UpdateRuleInput } from "@/lib/validations"
 import { z } from "zod"
 
@@ -74,10 +74,11 @@ export async function createRule(input: CreateRuleInput) {
     console.log("[createRule] Indexing rule in Pinecone...")
     try {
       const embedding = await generateEmbedding(`${validated.name}\n${validated.content}`)
-      const index = await getPineconeIndex(undefined, user.id)
+      const index = getPineconeIndex()
+      const namespace = getUserPineconeNamespace(user.id)
       const pineconeId = `rule_${rule.id}`
       
-      await index.upsert([
+      await index.namespace(namespace).upsert([
         {
           id: pineconeId,
           values: embedding,
@@ -168,10 +169,11 @@ export async function updateRule(input: UpdateRuleInput) {
     // Index updated rule in Pinecone
     try {
       const embedding = await generateEmbedding(`${updatedName}\n${updatedContent}`)
-      const index = await getPineconeIndex(undefined, user.id)
+      const index = getPineconeIndex()
+      const namespace = getUserPineconeNamespace(user.id)
       const pineconeId = `rule_${newRule.id}`
       
-      await index.upsert([
+      await index.namespace(namespace).upsert([
         {
           id: pineconeId,
           values: embedding,
@@ -333,8 +335,9 @@ export async function deleteRule(ruleId: string) {
     if (rule.pinecone_id) {
       console.log("[deleteRule] Deleting from Pinecone...")
       try {
-        const index = await getPineconeIndex(undefined, user.id)
-        await index.deleteOne(rule.pinecone_id)
+        const index = getPineconeIndex()
+        const namespace = getUserPineconeNamespace(user.id)
+        await index.namespace(namespace).deleteOne(rule.pinecone_id)
         console.log("[deleteRule] ✅ Deleted from Pinecone")
       } catch (error) {
         console.error("[deleteRule] ✗ Error deleting from Pinecone:", error)
@@ -382,8 +385,9 @@ export async function searchRules(query: string, repositoryId?: string, topK: nu
       const queryEmbedding = await generateEmbedding(query)
       
       console.log("[searchRules] Searching in Pinecone...")
-      const index = await getPineconeIndex(undefined, user.id)
-      const searchResults = await index.query({
+      const index = getPineconeIndex()
+      const namespace = getUserPineconeNamespace(user.id)
+      const searchResults = await index.namespace(namespace).query({
         vector: queryEmbedding,
         topK,
         includeMetadata: true,

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { hashToken } from "@/lib/mcp-token"
-import { getPineconeIndex } from "@/lib/pinecone"
+import { getPineconeIndex, getUserPineconeNamespace } from "@/lib/pinecone"
 import { generateEmbedding } from "@/lib/embeddings"
 
 /**
@@ -184,9 +184,10 @@ export async function POST(req: Request) {
           // Generate embedding for query
           const queryEmbedding = await generateEmbedding(query)
 
-          // Search in user's Pinecone index
-          const index = await getPineconeIndex(undefined, user.id)
-          const searchResults = await index.query({
+          // Search in user's Pinecone namespace
+          const index = getPineconeIndex()
+          const namespace = getUserPineconeNamespace(user.id)
+          const searchResults = await index.namespace(namespace).query({
             vector: queryEmbedding,
             topK: top_k,
             includeMetadata: true,

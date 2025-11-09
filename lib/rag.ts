@@ -1,5 +1,5 @@
 import { generateEmbedding } from "@/lib/embeddings"
-import { getPineconeIndex } from "@/lib/pinecone"
+import { getPineconeIndex, getUserPineconeNamespace } from "@/lib/pinecone"
 import type { MarkdownFileInfo } from "@/lib/markdown-context"
 
 const CHUNK_SIZE = 1000 // Characters per chunk
@@ -63,7 +63,8 @@ export async function indexMarkdownFilesToPinecone(
   userId: string,
   repositoryIds: string[]
 ): Promise<{ indexed: number; failed: number }> {
-  const index = await getPineconeIndex(undefined, userId)
+  const index = getPineconeIndex()
+  const namespace = getUserPineconeNamespace(userId)
   let indexed = 0
   let failed = 0
 
@@ -95,7 +96,7 @@ export async function indexMarkdownFilesToPinecone(
         try {
           const embedding = await generateEmbedding(chunk)
           
-          await index.upsert([
+          await index.namespace(namespace).upsert([
             {
               id: chunkId,
               values: embedding,
@@ -136,7 +137,8 @@ export async function generateRulesWithRAG(
   topK: number = 10
 ): Promise<string> {
   const { generateEmbedding } = await import("@/lib/embeddings")
-  const index = await getPineconeIndex(undefined, userId)
+  const index = getPineconeIndex()
+  const namespace = getUserPineconeNamespace(userId)
   const OpenAI = (await import("openai")).default
 
   // Generate embedding for the query
@@ -156,7 +158,7 @@ export async function generateRulesWithRAG(
     // Or we can use $in if Pinecone supports it
   }
 
-  const searchResults = await index.query({
+  const searchResults = await index.namespace(namespace).query({
     vector: queryEmbedding,
     topK: topK * 2, // Get more results to filter
     includeMetadata: true,
