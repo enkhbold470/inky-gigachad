@@ -14,7 +14,7 @@ import { saveRepository, getActiveRepository } from "@/app/actions/repo_actions"
 import { createRule, getUserRules, searchRules, deleteRule } from "@/app/actions/rule_actions"
 import { getPublicTemplates, loadEmergentTemplates } from "@/app/actions/template_actions"
 import { createSession, getUserSessions, endSession } from "@/app/actions/session_actions"
-import { Github, Plus, BookOpen, Code, Search, Trash2, Square } from "lucide-react"
+import { Github, Plus, BookOpen, Code, Search, Trash2, Square, Loader2 } from "lucide-react"
 import type { GitHubRepo } from "@/lib/github"
 import type { Repository, Rule, RuleTemplate, CodingSession } from "@/lib/types"
 import { toast } from "sonner"
@@ -34,6 +34,8 @@ export default function Dashboard() {
   const [ruleContent, setRuleContent] = useState("")
   const [showRuleDialog, setShowRuleDialog] = useState(false)
   const [selectedTemplate, setSelectedTemplate] = useState<string>("")
+  const [isCreatingRule, setIsCreatingRule] = useState(false)
+  const [isIndexingRule, setIsIndexingRule] = useState(false)
 
   // Session creation state
   const [sessionTitle, setSessionTitle] = useState("")
@@ -43,31 +45,39 @@ export default function Dashboard() {
   const loadData = useCallback(async () => {
     if (!isLoaded || !user) return
     
+    console.log("[Dashboard] loadData called")
     setLoading(true)
     try {
       // Load GitHub repos
+      console.log("[Dashboard] Calling getRepositories...")
       const reposResult = await getRepositories()
+      console.log("[Dashboard] getRepositories result:", reposResult.success ? "✓ Success" : "✗ Failed")
       if (reposResult.success && reposResult.data) {
         setGithubRepos(reposResult.data)
       }
 
       // Load active repo
+      console.log("[Dashboard] Calling getActiveRepository...")
       const activeRepoResult = await getActiveRepository()
+      console.log("[Dashboard] getActiveRepository result:", activeRepoResult.success ? "✓ Success" : "✗ Failed")
       if (activeRepoResult.success && activeRepoResult.data) {
         setActiveRepo(activeRepoResult.data)
         loadRulesForRepo(activeRepoResult.data.id)
       }
 
       // Load templates
+      console.log("[Dashboard] Loading templates...")
       await loadTemplates()
 
       // Load sessions
+      console.log("[Dashboard] Calling getUserSessions...")
       const sessionsResult = await getUserSessions(activeRepoResult.data?.id, true)
+      console.log("[Dashboard] getUserSessions result:", sessionsResult.success ? "✓ Success" : "✗ Failed")
       if (sessionsResult.success && sessionsResult.data) {
         setSessions(sessionsResult.data)
       }
     } catch (error) {
-      console.error("Error loading data:", error)
+      console.error("[Dashboard] ✗ Error loading data:", error)
       toast.error("Failed to load data")
     } finally {
       setLoading(false)
@@ -97,7 +107,10 @@ export default function Dashboard() {
   }
 
   async function handleSaveRepo(repo: GitHubRepo) {
+    console.log("[Dashboard] handleSaveRepo called, repo:", repo.name)
+    console.log("[Dashboard] Calling saveRepository server action...")
     const result = await saveRepository(repo)
+    console.log("[Dashboard] saveRepository result:", result.success ? "✓ Success" : "✗ Failed", result.error || "")
     if (result.success) {
       toast.success(`Repository ${repo.name} saved`)
       await loadData()
@@ -107,26 +120,52 @@ export default function Dashboard() {
   }
 
   async function handleCreateRule() {
+    console.log("[Dashboard] handleCreateRule called")
     if (!ruleName || !ruleContent) {
+      console.error("[Dashboard] ✗ Validation failed: missing fields")
       toast.error("Please fill in all fields")
       return
     }
 
-    const result = await createRule({
-      name: ruleName,
-      content: ruleContent,
-      repository_id: activeRepo?.id,
-    })
+    setIsCreatingRule(true)
+    setIsIndexingRule(false)
 
-    if (result.success) {
-      toast.success("Rule created successfully")
-      setRuleName("")
-      setRuleContent("")
-      setShowRuleDialog(false)
-      setSelectedTemplate("")
-      await loadRulesForRepo(activeRepo?.id)
-    } else {
-      toast.error(result.error || "Failed to create rule")
+    try {
+      console.log("[Dashboard] Calling createRule server action...")
+      const result = await createRule({
+        name: ruleName,
+        content: ruleContent,
+        repository_id: activeRepo?.id,
+      })
+      console.log("[Dashboard] createRule result:", result.success ? "✓ Success" : "✗ Failed", result.error || "")
+
+      if (result.success) {
+        toast.success("Rule created successfully!")
+        setIsCreatingRule(false)
+        setIsIndexingRule(true)
+        
+        // Show indexing message
+        toast.info("Indexing rule in Pinecone...", { duration: 3000 })
+        
+        setRuleName("")
+        setRuleContent("")
+        setShowRuleDialog(false)
+        setSelectedTemplate("")
+        await loadRulesForRepo(activeRepo?.id)
+        
+        // Reset indexing state after a delay
+        setTimeout(() => {
+          setIsIndexingRule(false)
+        }, 2000)
+      } else {
+        toast.error(result.error || "Failed to create rule")
+      }
+    } catch (error) {
+      console.error("[Dashboard] ✗ Error creating rule:", error)
+      toast.error("Failed to create rule")
+    } finally {
+      setIsCreatingRule(false)
+      setIsIndexingRule(false)
     }
   }
 
@@ -141,12 +180,16 @@ export default function Dashboard() {
   }
 
   async function handleSearchRules() {
+    console.log("[Dashboard] handleSearchRules called, query:", searchQuery)
     if (!searchQuery.trim()) {
+      console.log("[Dashboard] Empty query, loading all rules...")
       await loadRulesForRepo(activeRepo?.id)
       return
     }
 
+    console.log("[Dashboard] Calling searchRules server action...")
     const result = await searchRules(searchQuery, activeRepo?.id, 10)
+    console.log("[Dashboard] searchRules result:", result.success ? "✓ Success" : "✗ Failed", result.error || "")
     if (result.success && result.data) {
       setRules(result.data)
     } else {
@@ -155,9 +198,12 @@ export default function Dashboard() {
   }
 
   async function handleDeleteRule(ruleId: string) {
+    console.log("[Dashboard] handleDeleteRule called, ruleId:", ruleId)
     if (!confirm("Are you sure you want to delete this rule?")) return
 
+    console.log("[Dashboard] Calling deleteRule server action...")
     const result = await deleteRule(ruleId)
+    console.log("[Dashboard] deleteRule result:", result.success ? "✓ Success" : "✗ Failed", result.error || "")
     if (result.success) {
       toast.success("Rule deleted")
       await loadRulesForRepo(activeRepo?.id)
@@ -167,16 +213,20 @@ export default function Dashboard() {
   }
 
   async function handleCreateSession() {
+    console.log("[Dashboard] handleCreateSession called")
     if (!sessionTitle) {
+      console.error("[Dashboard] ✗ Validation failed: missing title")
       toast.error("Please enter a session title")
       return
     }
 
+    console.log("[Dashboard] Calling createSession server action...")
     const result = await createSession({
       title: sessionTitle,
       context: sessionContext,
       repository_id: activeRepo?.id,
     })
+    console.log("[Dashboard] createSession result:", result.success ? "✓ Success" : "✗ Failed", result.error || "")
 
     if (result.success) {
       toast.success("Session created")
@@ -190,7 +240,10 @@ export default function Dashboard() {
   }
 
   async function handleEndSession(sessionId: string) {
+    console.log("[Dashboard] handleEndSession called, sessionId:", sessionId)
+    console.log("[Dashboard] Calling endSession server action...")
     const result = await endSession(sessionId)
+    console.log("[Dashboard] endSession result:", result.success ? "✓ Success" : "✗ Failed", result.error || "")
     if (result.success) {
       toast.success("Session ended")
       await loadData()
@@ -358,9 +411,30 @@ export default function Dashboard() {
                           rows={8}
                         />
                       </div>
-                      <Button onClick={handleCreateRule} className="w-full">
-                        Create Rule
+                      <Button 
+                        onClick={handleCreateRule} 
+                        className="w-full"
+                        disabled={isCreatingRule || isIndexingRule}
+                      >
+                        {isCreatingRule ? (
+                          <>
+                            <Loader2 className="size-4 animate-spin mr-2" />
+                            Creating Rule...
+                          </>
+                        ) : isIndexingRule ? (
+                          <>
+                            <Loader2 className="size-4 animate-spin mr-2" />
+                            Indexing Rule...
+                          </>
+                        ) : (
+                          "Create Rule"
+                        )}
                       </Button>
+                      {isIndexingRule && (
+                        <p className="text-sm text-muted-foreground text-center">
+                          Your rule is being indexed in Pinecone for semantic search...
+                        </p>
+                      )}
                     </div>
                   </DialogContent>
                 </Dialog>
