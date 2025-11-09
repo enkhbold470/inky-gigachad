@@ -17,8 +17,8 @@
 						"type": "text"
 					},
 					{
-						"key": "Authorization",
-						"value": "Bearer {{mcp_token}}",
+						"key": "X-User-Id",
+						"value": "{{user_id}}",
 						"type": "text"
 					}
 				],
@@ -51,8 +51,8 @@
 						"type": "text"
 					},
 					{
-						"key": "Authorization",
-						"value": "Bearer {{mcp_token}}",
+						"key": "X-User-Id",
+						"value": "{{user_id}}",
 						"type": "text"
 					}
 				],
@@ -85,8 +85,8 @@
 						"type": "text"
 					},
 					{
-						"key": "Authorization",
-						"value": "Bearer {{mcp_token}}",
+						"key": "X-User-Id",
+						"value": "{{user_id}}",
 						"type": "text"
 					}
 				],
@@ -113,6 +113,11 @@
 		{
 			"key": "base_url",
 			"value": "http://localhost:3000",
+			"type": "string"
+		},
+		{
+			"key": "user_id",
+			"value": "user_35DB5vULiQ5W5A6FPIrMfOddncN",
 			"type": "string"
 		},
 		{

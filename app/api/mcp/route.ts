@@ -129,7 +129,14 @@ export async function POST(req: Request) {
     // Extract userId from X-User-Id header
     const userId = req.headers.get("X-User-Id")
     
+    console.log("[MCP] POST request received")
+    console.log("[MCP] Headers:", {
+      "X-User-Id": userId,
+      "Content-Type": req.headers.get("Content-Type"),
+    })
+    
     if (!userId) {
+      console.error("[MCP] Missing X-User-Id header")
       return NextResponse.json(
         {
           jsonrpc: "2.0",
@@ -146,6 +153,7 @@ export async function POST(req: Request) {
     const user = await authenticateUser(userId)
 
     if (!user) {
+      console.error("[MCP] Invalid user ID:", userId)
       return NextResponse.json(
         {
           jsonrpc: "2.0",
@@ -160,17 +168,57 @@ export async function POST(req: Request) {
     }
 
     // Parse JSON-RPC request
-    const body = await req.json()
+    let body
+    try {
+      const bodyText = await req.text()
+      console.log("[MCP] Request body:", bodyText || "(empty)")
+      
+      if (!bodyText || bodyText.trim() === "") {
+        console.error("[MCP] Empty request body")
+        return NextResponse.json(
+          {
+            jsonrpc: "2.0",
+            error: {
+              code: -32600,
+              message: "Invalid Request",
+              data: "Request body is empty",
+            },
+            id: null,
+          },
+          { status: 400 }
+        )
+      }
+      
+      body = JSON.parse(bodyText)
+    } catch (parseError) {
+      console.error("[MCP] JSON parse error:", parseError)
+      return NextResponse.json(
+        {
+          jsonrpc: "2.0",
+          error: {
+            code: -32700,
+            message: "Parse error",
+            data: parseError instanceof Error ? parseError.message : "Invalid JSON",
+          },
+          id: null,
+        },
+        { status: 400 }
+      )
+    }
+
+    console.log("[MCP] Parsed body:", JSON.stringify(body, null, 2))
     const { method, params, id } = body
 
-    if (!method || !id) {
+    // Validate method exists
+    if (!method) {
+      console.error("[MCP] Missing method:", body)
       return NextResponse.json(
         {
           jsonrpc: "2.0",
           error: {
             code: -32600,
             message: "Invalid Request",
-            data: "Missing method or id",
+            data: `Missing method. Received: ${JSON.stringify(body)}`,
           },
           id: id || null,
         },
@@ -178,15 +226,59 @@ export async function POST(req: Request) {
       )
     }
 
+    // Handle notifications (no id required)
+    if (id === undefined && method.startsWith("notifications/")) {
+      console.log(`[MCP] Notification received: ${method}`)
+      // Notifications don't require a response
+      return NextResponse.json({ jsonrpc: "2.0" }, { status: 200 })
+    }
+
+    // Requests require an id
+    if (id === undefined) {
+      console.error("[MCP] Missing id for request:", { method, body })
+      return NextResponse.json(
+        {
+          jsonrpc: "2.0",
+          error: {
+            code: -32600,
+            message: "Invalid Request",
+            data: `Missing id for request method: ${method}`,
+          },
+          id: null,
+        },
+        { status: 400 }
+      )
+    }
+
     // Handle MCP protocol methods
+    if (method === "initialize") {
+      console.log("[MCP] Initialize request received with params:", params)
+      return NextResponse.json({
+        jsonrpc: "2.0",
+        result: {
+          protocolVersion: "2024-11-05",
+          capabilities: {
+            tools: {},
+            experimental: {},
+          },
+          serverInfo: {
+            name: "inky-mcp-server",
+            version: "1.0.0",
+          },
+        },
+        id,
+      })
+    }
+
     if (method === "tools/list") {
+      console.log("[MCP] tools/list request received")
       return NextResponse.json({
         jsonrpc: "2.0",
         result: {
           tools: [
             {
               name: "list_rules",
-              description: "List all user's rules, optionally filtered by repository",
+              description: "List all user's coding rules, optionally filtered by repository",
               inputSchema: {
                 type: "object",
                 properties: {
@@ -195,6 +287,7 @@ export async function POST(req: Request) {
                     description: "Optional repository ID to filter rules",
                   },
                 },
+                additionalProperties: false,
               },
             },
           ],
@@ -204,9 +297,11 @@ export async function POST(req: Request) {
     }
 
     if (method === "tools/call") {
+      console.log("[MCP] tools/call request received with params:", params)
       const { name, arguments: toolArgs } = params || {}
 
       if (!name) {
+        console.error("[MCP] Missing tool name in tools/call")
         return NextResponse.json(
           {
             jsonrpc: "2.0",
@@ -224,6 +319,7 @@ export async function POST(req: Request) {
       // Handle list_rules tool
       if (name === "list_rules") {
         const { repository_id } = toolArgs || {}
+        console.log(`[MCP] Calling list_rules tool for user ${user.id}, repository_id: ${repository_id || "all"}`)
 
         try {
           const rules = await prisma.rule.findMany({
@@ -243,6 +339,7 @@ export async function POST(req: Request) {
             },
           })
 
+          console.log(`[MCP] Found ${rules.length} rules`)
           return NextResponse.json({
             jsonrpc: "2.0",
             result: {
@@ -263,7 +360,7 @@ export async function POST(req: Request) {
               error: {
                 code: -32603,
                 message: "Internal error",
-                data: "Failed to list rules",
+                data: error instanceof Error ? error.message : "Failed to list rules",
               },
               id,
             },
