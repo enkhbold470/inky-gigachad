@@ -61,9 +61,17 @@ function chunkText(text: string, chunkSize: number = CHUNK_SIZE, overlap: number
 export async function indexMarkdownFilesToPinecone(
   files: Array<{ path: string; content: string; size: number }>,
   userId: string,
-  repositoryIds: string[]
-): Promise<{ indexed: number; failed: number }> {
-  console.log(`[indexMarkdownFilesToPinecone] Starting indexing for ${files.length} files`)
+  repositoryIds: string[],
+  onLog?: (level: string, message: string) => void
+): Promise<{ indexed: number; failed: number; logs?: Array<{ level: string; message: string; timestamp: number }> }> {
+  const logs: Array<{ level: string; message: string; timestamp: number }> = []
+  const addLog = (level: string, message: string) => {
+    logs.push({ level, message, timestamp: Date.now() })
+    console.log(`[${level.toUpperCase()}] ${message}`)
+    onLog?.(level, message)
+  }
+
+  addLog('info', `Starting indexing for ${files.length} files`)
   const index = getPineconeIndex()
   const namespace = getUserPineconeNamespace(userId)
   let indexed = 0
@@ -73,7 +81,9 @@ export async function indexMarkdownFilesToPinecone(
     try {
       // Validate file content
       if (!file.content || typeof file.content !== 'string') {
-        console.warn(`[indexMarkdownFilesToPinecone] Invalid content for file ${file.path}, skipping`)
+        const msg = `Invalid content for file ${file.path}, skipping`
+        console.warn(`[indexMarkdownFilesToPinecone] ${msg}`)
+        addLog('warn', msg)
         failed++
         continue
       }
@@ -84,12 +94,14 @@ export async function indexMarkdownFilesToPinecone(
         : [file.content]
 
       if (chunks.length === 0) {
-        console.warn(`[indexMarkdownFilesToPinecone] No chunks generated for file ${file.path}, skipping`)
+        const msg = `No chunks generated for file ${file.path}, skipping`
+        console.warn(`[indexMarkdownFilesToPinecone] ${msg}`)
+        addLog('warn', msg)
         failed++
         continue
       }
 
-      console.log(`[indexMarkdownFilesToPinecone] Processing file ${file.path} (${chunks.length} chunks)`)
+      addLog('info', `Processing file ${file.path} (${chunks.length} chunks)`)
 
       // Index each chunk
       for (let i = 0; i < chunks.length; i++) {
@@ -117,18 +129,22 @@ export async function indexMarkdownFilesToPinecone(
           
           indexed++
         } catch (error) {
-          console.error(`[indexMarkdownFilesToPinecone] Error indexing chunk ${i} of ${file.path}:`, error)
+          const msg = `Error indexing chunk ${i} of ${file.path}: ${error instanceof Error ? error.message : 'Unknown error'}`
+          console.error(`[indexMarkdownFilesToPinecone] ${msg}`)
+          addLog('error', msg)
           failed++
         }
       }
     } catch (error) {
-      console.error(`[indexMarkdownFilesToPinecone] Error processing file ${file.path}:`, error)
+      const msg = `Error processing file ${file.path}: ${error instanceof Error ? error.message : 'Unknown error'}`
+      console.error(`[indexMarkdownFilesToPinecone] ${msg}`)
+      addLog('error', msg)
       failed++
     }
   }
 
-  console.log(`[indexMarkdownFilesToPinecone] Indexing complete: ${indexed} indexed, ${failed} failed`)
-  return { indexed, failed }
+  addLog('info', `Indexing complete: ${indexed} indexed, ${failed} failed`)
+  return { indexed, failed, logs }
 }
 
 /**

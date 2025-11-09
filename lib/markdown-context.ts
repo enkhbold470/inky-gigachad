@@ -19,6 +19,7 @@ export interface MarkdownContextResult {
   totalFiles: number
   commands: string[]
   filesWithContent?: Array<{ path: string; content: string; size: number }>
+  logs?: Array<{ level: string; message: string; timestamp: number }>
 }
 
 /**
@@ -200,44 +201,53 @@ export async function getMarkdownContextFromRepositories(
   // Filter to only public repositories
   const publicRepos = repositories.filter((repo) => !repo.private)
   
-  console.log(`[getMarkdownContextFromRepositories] Processing ${publicRepos.length} public repositories`)
-  
   const allFiles: MarkdownFileInfo[] = []
   const commands: string[] = []
   const contexts: string[] = []
   const filesWithContent: Array<{ path: string; content: string; size: number }> = []
+  const logs: Array<{ level: string; message: string; timestamp: number }> = []
   let totalSize = 0
   const processedFiles: MarkdownFileInfo[] = []
   let successCount = 0
   let errorCount = 0
+
+  // Helper to add logs
+  const addLog = (level: string, message: string) => {
+    logs.push({ level, message, timestamp: Date.now() })
+    console.log(`[${level.toUpperCase()}] ${message}`)
+  }
+
+  addLog('info', `Processing ${publicRepos.length} public repositories`)
 
   // Process each repository
   for (const repo of publicRepos) {
     const [owner, repoName] = repo.full_name.split("/")
     
     try {
-      console.log(`[getMarkdownContextFromRepositories] Fetching markdown files from ${repo.full_name}`)
+      addLog('info', `Fetching markdown files from ${repo.full_name}`)
       
       // Add command for this repo
       commands.push(`git clone https://github.com/${repo.full_name}.git`)
       commands.push(`find ${repo.full_name} -type f \\( -name "*.md" -o -name "*.mdc" \\) -not -path "*/node_modules/*" -not -path "*/.next/*" -not -path "*/.git/*"`)
       
-      const markdownFiles = await fetchMarkdownFilesFromRepo(owner, repoName)
+      const markdownFiles = await fetchMarkdownFilesFromRepo(owner, repoName, (level, message) => {
+        addLog(level, message)
+      })
       
-      console.log(`[getMarkdownContextFromRepositories] Found ${markdownFiles.length} markdown files in ${repo.full_name}`)
+      addLog('info', `Found ${markdownFiles.length} markdown files in ${repo.full_name}`)
       
       for (const file of markdownFiles) {
         const relativePath = `${repo.full_name}/${file.path}`
         
         // Skip files that are too large
         if (file.size > MAX_FILE_SIZE) {
-          console.warn(`[getMarkdownContextFromRepositories] Skipping large file: ${relativePath} (${file.size} bytes)`)
+          addLog('warn', `Skipping large file: ${relativePath} (${file.size} bytes)`)
           continue
         }
 
         // Stop if we've reached the total size limit
         if (totalSize + file.size > MAX_TOTAL_SIZE) {
-          console.warn(`[getMarkdownContextFromRepositories] Reached total size limit, stopping at ${totalSize} bytes`)
+          addLog('warn', `Reached total size limit, stopping at ${totalSize} bytes`)
           break
         }
 
@@ -261,16 +271,16 @@ export async function getMarkdownContextFromRepositories(
         commands.push(`cat "${relativePath}"`)
       }
     } catch (error) {
-      console.error(`[getMarkdownContextFromRepositories] Error processing ${repo.full_name}:`, error)
+      addLog('error', `Error processing ${repo.full_name}: ${error instanceof Error ? error.message : 'Unknown error'}`)
       errorCount++
       // Continue with other repositories
     }
   }
 
   const totalFiles = allFiles.length
-  console.log(`[getMarkdownContextFromRepositories] Total files found: ${totalFiles}, Processed: ${processedFiles.length}`)
+  addLog('info', `Total files found: ${totalFiles}, Processed: ${processedFiles.length}`)
   if (errorCount > 0) {
-    console.log(`[getMarkdownContextFromRepositories] Successfully fetched ${successCount} files, ${errorCount} errors`)
+    addLog('warn', `Successfully fetched ${successCount} files, ${errorCount} errors`)
   }
 
   return {
@@ -279,6 +289,7 @@ export async function getMarkdownContextFromRepositories(
     totalFiles: totalFiles,
     commands,
     filesWithContent,
+    logs,
   }
 }
 

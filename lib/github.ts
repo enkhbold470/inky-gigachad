@@ -263,7 +263,8 @@ export function hasNeuroFocusTag(commitMessage: string): boolean {
  */
 export async function fetchMarkdownFilesFromRepo(
   owner: string,
-  repo: string
+  repo: string,
+  onLog?: (level: string, message: string) => void
 ): Promise<Array<{ path: string; content: string; size: number }>> {
   const token = await getGitHubAccessToken()
   
@@ -311,12 +312,17 @@ export async function fetchMarkdownFilesFromRepo(
     
     // Check if tree was truncated (GitHub API limitation)
     if (treeData.truncated) {
-      console.warn(`[fetchMarkdownFilesFromRepo] Tree was truncated for ${owner}/${repo}. Some files may be missing.`)
+      const msg = `Tree was truncated for ${owner}/${repo}. Some files may be missing.`
+      console.warn(`[fetchMarkdownFilesFromRepo] ${msg}`)
+      onLog?.('warn', msg)
       // For truncated trees, we might need to use a different approach (e.g., search API)
       // For now, we'll proceed with what we have
     }
     
-    console.log(`[fetchMarkdownFilesFromRepo] Tree contains ${treeData.tree?.length || 0} total files`)
+    const totalFiles = treeData.tree?.length || 0
+    const msg1 = `Tree contains ${totalFiles} total files`
+    console.log(`[fetchMarkdownFilesFromRepo] ${msg1}`)
+    onLog?.('info', msg1)
     
     // Filter for markdown files
     const allBlobs = (treeData.tree || []).filter((file: { type: string }) => file.type === "blob")
@@ -324,7 +330,9 @@ export async function fetchMarkdownFilesFromRepo(
       (file: { path: string }) => file.path.endsWith(".md") || file.path.endsWith(".mdc")
     )
     
-    console.log(`[fetchMarkdownFilesFromRepo] Found ${markdownBlobs.length} markdown files before exclusions`)
+    const msg2 = `Found ${markdownBlobs.length} markdown files before exclusions`
+    console.log(`[fetchMarkdownFilesFromRepo] ${msg2}`)
+    onLog?.('info', msg2)
     
     const markdownFiles = markdownBlobs.filter(
       (file: { path: string; type: string; size?: number }) =>
@@ -333,8 +341,14 @@ export async function fetchMarkdownFilesFromRepo(
         !file.path.includes(".git")
     )
     
-    console.log(`[fetchMarkdownFilesFromRepo] Found ${markdownFiles.length} markdown files after filtering`)
-    console.log(`[fetchMarkdownFilesFromRepo] Markdown files:`, markdownFiles.map((f: { path: string }) => f.path).join(", "))
+    const msg3 = `Found ${markdownFiles.length} markdown files after filtering`
+    console.log(`[fetchMarkdownFilesFromRepo] ${msg3}`)
+    onLog?.('info', msg3)
+    
+    const fileList = markdownFiles.map((f: { path: string }) => f.path).join(", ")
+    const msg4 = `Markdown files: ${fileList}`
+    console.log(`[fetchMarkdownFilesFromRepo] ${msg4}`)
+    onLog?.('info', msg4)
 
     // Fetch content for each markdown file
     const filesWithContent: Array<{ path: string; content: string; size: number }> = []
@@ -365,7 +379,9 @@ export async function fetchMarkdownFilesFromRepo(
             })
             successCount++
           } else {
-            console.warn(`[fetchMarkdownFilesFromRepo] File ${file.path} has unexpected encoding: ${contentData.encoding}`)
+            const msg = `File ${file.path} has unexpected encoding: ${contentData.encoding}`
+            console.warn(`[fetchMarkdownFilesFromRepo] ${msg}`)
+            onLog?.('warn', msg)
             errorCount++
           }
         } else {
@@ -379,7 +395,9 @@ export async function fetchMarkdownFilesFromRepo(
       }
     }
 
-    console.log(`[fetchMarkdownFilesFromRepo] Successfully fetched ${successCount} files, ${errorCount} errors`)
+    const msg = `Successfully fetched ${successCount} files, ${errorCount} errors`
+    console.log(`[fetchMarkdownFilesFromRepo] ${msg}`)
+    onLog?.('info', msg)
     return filesWithContent
   } catch (error) {
     console.error(`Error fetching markdown files from ${owner}/${repo}:`, error)

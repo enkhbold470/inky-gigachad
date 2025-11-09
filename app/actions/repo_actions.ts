@@ -5,13 +5,8 @@ import { prisma } from "@/lib/prisma"
 import { saveRepositorySchema, type SaveRepositoryInput } from "@/lib/validations"
 import type { GitHubRepo } from "@/lib/github"
 import { z } from "zod"
-import OpenAI from "openai"
-import { getAllMarkdownContext, getAllMarkdownContextWithInfo, getMarkdownContextFromRepositories } from "@/lib/markdown-context"
+import { getMarkdownContextFromRepositories } from "@/lib/markdown-context"
 import { indexMarkdownFilesToPinecone, generateRulesWithRAG } from "@/lib/rag"
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-})
 
 /**
  * Get or create user in database
@@ -209,20 +204,70 @@ export async function saveRepositories(repos: GitHubRepo[]) {
     console.log("[saveRepositories] ✓ Loaded markdown files")
     console.log("[saveRepositories] Found", markdownContextResult.totalFiles, "markdown files from public repositories")
 
+    // Collect processing details
+    const processingDetails: {
+      repositories: Array<{ name: string; filesFound: number; filesProcessed: number }>
+      files: Array<{ path: string; chunks?: number; status: string }>
+      totalChunks?: number
+      logs?: Array<{ level: string; message: string; timestamp: number }>
+    } = {
+      repositories: repos.map(repo => ({
+        name: repo.full_name,
+        filesFound: markdownContextResult.files.filter(f => f.path.startsWith(repo.full_name)).length,
+        filesProcessed: markdownContextResult.filesWithContent?.filter(f => f.path.startsWith(repo.full_name)).length || 0,
+      })),
+      files: markdownContextResult.filesWithContent?.map(file => ({
+        path: file.path,
+        status: 'loaded',
+      })) || [],
+      logs: markdownContextResult.logs || [],
+    }
+
     // Step 2: Index markdown files to Pinecone
     console.log("[saveRepositories] Indexing markdown files to Pinecone...")
     const repositoryIds = savedRepos.map((r) => r.id)
     const filesWithContent = markdownContextResult.filesWithContent || []
 
+    // Calculate chunks for each file before indexing
+    const CHUNK_SIZE = 1000
+    const CHUNK_OVERLAP = 200
+    let totalChunks = 0
+    processingDetails.files = filesWithContent.map(file => {
+      const chunks = file.content.length > CHUNK_SIZE 
+        ? Math.ceil((file.content.length - CHUNK_OVERLAP) / (CHUNK_SIZE - CHUNK_OVERLAP))
+        : 1
+      totalChunks += chunks
+      return {
+        path: file.path,
+        chunks,
+        status: 'ready',
+      }
+    })
+    processingDetails.totalChunks = totalChunks
+
     const indexingResult = await indexMarkdownFilesToPinecone(
       filesWithContent.filter(f => f.content.length > 0),
       user.id,
-      repositoryIds
+      repositoryIds,
+      (level, message) => {
+        processingDetails.logs?.push({ level, message, timestamp: Date.now() })
+      }
     )
     console.log("[saveRepositories] ✅ Indexed", indexingResult.indexed, "chunks to Pinecone")
     if (indexingResult.failed > 0) {
       console.warn("[saveRepositories] ⚠️ Failed to index", indexingResult.failed, "chunks")
     }
+
+    // Merge indexing logs
+    if (indexingResult.logs) {
+      processingDetails.logs = [...(processingDetails.logs || []), ...indexingResult.logs]
+    }
+
+    // Update processing details with indexing results
+    processingDetails.files = processingDetails.files.map(file => ({
+      ...file,
+      status: indexingResult.failed > 0 ? 'indexed' : 'indexed',
+    }))
 
     // Step 3: Generate rules using RAG
     const languages = savedRepos
@@ -263,7 +308,6 @@ export async function saveRepositories(repos: GitHubRepo[]) {
         },
       })
 
-      console.log("[saveRepositories] ✅ Repositories and rule saved successfully")
       return { 
         success: true, 
         data: { 
@@ -274,6 +318,7 @@ export async function saveRepositories(repos: GitHubRepo[]) {
           commands: markdownContextResult.commands,
           indexedChunks: indexingResult.indexed,
           failedChunks: indexingResult.failed,
+          processingDetails,
         } 
       }
     } catch (aiError) {
@@ -312,6 +357,7 @@ This rule was automatically generated based on your repository selection.`
           markdownFiles: markdownContextResult.files,
           totalMarkdownFiles: markdownContextResult.totalFiles,
           commands: markdownContextResult.commands,
+          processingDetails,
         } 
       }
     }
