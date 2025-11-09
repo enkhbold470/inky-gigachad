@@ -27,15 +27,28 @@ async function getOrCreateUser(clerkId: string) {
  * Create a new coding session
  */
 export async function createSession(input: CreateSessionInput) {
+  console.log("[createSession] Server action called")
+  console.log("[createSession] Input:", { title: input.title, repository_id: input.repository_id })
+  
   try {
+    console.log("[createSession] Authenticating user...")
     const { userId } = await auth()
+    console.log("[createSession] User ID:", userId ? "✓ Found" : "✗ Not found")
+    
     if (!userId) {
+      console.error("[createSession] ✗ User not authenticated")
       return { success: false, error: "Not authenticated" }
     }
 
+    console.log("[createSession] Validating input...")
     const validated = createSessionSchema.parse(input)
+    console.log("[createSession] ✓ Validation passed")
+    
+    console.log("[createSession] Getting or creating user...")
     const user = await getOrCreateUser(userId)
+    console.log("[createSession] User ID:", user.id)
 
+    console.log("[createSession] Creating session in database...")
     const session = await prisma.codingSession.create({
       data: {
         user_id: user.id,
@@ -57,8 +70,10 @@ export async function createSession(input: CreateSessionInput) {
 
     // If context is provided, automatically search and link relevant rules
     if (validated.context) {
+      console.log("[createSession] Context provided, searching for relevant rules...")
       const searchResult = await searchRules(validated.context, validated.repository_id, 5)
       if (searchResult.success && searchResult.data) {
+        console.log("[createSession] Found", searchResult.data.length, "relevant rules, linking...")
         await Promise.all(
           searchResult.data.map((rule) =>
             prisma.codingSessionRule.create({
@@ -69,15 +84,19 @@ export async function createSession(input: CreateSessionInput) {
             })
           )
         )
+        console.log("[createSession] ✓ Rules linked successfully")
       }
     }
 
+    console.log("[createSession] ✅ Session created successfully:", session.id)
     return { success: true, data: session }
   } catch (error) {
+    console.error("[createSession] ✗ Error occurred:", error)
     if (error instanceof z.ZodError) {
+      console.error("[createSession] Validation errors:", error.issues)
       return { success: false, error: "Validation failed", details: error.issues }
     }
-    console.error("Error creating session:", error)
+    console.error("[createSession] ✗ Failed to create session:", error)
     return { success: false, error: error instanceof Error ? error.message : "Failed to create session" }
   }
 }
@@ -167,14 +186,24 @@ export async function updateSession(input: UpdateSessionInput) {
  * Get user's coding sessions
  */
 export async function getUserSessions(repositoryId?: string, activeOnly: boolean = false) {
+  console.log("[getUserSessions] Server action called")
+  console.log("[getUserSessions] Repository ID:", repositoryId || "none", "| Active only:", activeOnly)
+  
   try {
+    console.log("[getUserSessions] Authenticating user...")
     const { userId } = await auth()
+    console.log("[getUserSessions] User ID:", userId ? "✓ Found" : "✗ Not found")
+    
     if (!userId) {
+      console.error("[getUserSessions] ✗ User not authenticated")
       return { success: false, error: "Not authenticated" }
     }
 
+    console.log("[getUserSessions] Getting or creating user...")
     const user = await getOrCreateUser(userId)
+    console.log("[getUserSessions] User ID:", user.id)
 
+    console.log("[getUserSessions] Fetching sessions from database...")
     const sessions = await prisma.codingSession.findMany({
       where: {
         user_id: user.id,
@@ -206,9 +235,10 @@ export async function getUserSessions(repositoryId?: string, activeOnly: boolean
       },
     })
 
+    console.log("[getUserSessions] ✅ Found", sessions.length, "sessions")
     return { success: true, data: sessions }
   } catch (error) {
-    console.error("Error fetching sessions:", error)
+    console.error("[getUserSessions] ✗ Error fetching sessions:", error)
     return { success: false, error: error instanceof Error ? error.message : "Failed to fetch sessions" }
   }
 }
@@ -271,14 +301,24 @@ export async function getSessionById(sessionId: string) {
  * End a coding session
  */
 export async function endSession(sessionId: string) {
+  console.log("[endSession] Server action called")
+  console.log("[endSession] Session ID:", sessionId)
+  
   try {
+    console.log("[endSession] Authenticating user...")
     const { userId } = await auth()
+    console.log("[endSession] User ID:", userId ? "✓ Found" : "✗ Not found")
+    
     if (!userId) {
+      console.error("[endSession] ✗ User not authenticated")
       return { success: false, error: "Not authenticated" }
     }
 
+    console.log("[endSession] Getting or creating user...")
     const user = await getOrCreateUser(userId)
+    console.log("[endSession] User ID:", user.id)
 
+    console.log("[endSession] Checking if session exists...")
     const session = await prisma.codingSession.findFirst({
       where: {
         id: sessionId,
@@ -287,9 +327,11 @@ export async function endSession(sessionId: string) {
     })
 
     if (!session) {
+      console.error("[endSession] ✗ Session not found")
       return { success: false, error: "Session not found" }
     }
 
+    console.log("[endSession] Ending session...")
     const updated = await prisma.codingSession.update({
       where: { id: sessionId },
       data: {
@@ -298,9 +340,10 @@ export async function endSession(sessionId: string) {
       },
     })
 
+    console.log("[endSession] ✅ Session ended successfully")
     return { success: true, data: updated }
   } catch (error) {
-    console.error("Error ending session:", error)
+    console.error("[endSession] ✗ Error ending session:", error)
     return { success: false, error: error instanceof Error ? error.message : "Failed to end session" }
   }
 }

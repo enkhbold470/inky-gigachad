@@ -60,7 +60,11 @@ export async function createTemplate(input: z.infer<typeof createTemplateSchema>
  * Get all public templates
  */
 export async function getPublicTemplates(category?: string) {
+  console.log("[getPublicTemplates] Server action called")
+  console.log("[getPublicTemplates] Category:", category || "none")
+  
   try {
+    console.log("[getPublicTemplates] Fetching templates from database...")
     const templates = await prisma.ruleTemplate.findMany({
       where: {
         is_public: true,
@@ -77,9 +81,10 @@ export async function getPublicTemplates(category?: string) {
       },
     })
 
+    console.log("[getPublicTemplates] ✅ Found", templates.length, "templates")
     return { success: true, data: templates }
   } catch (error) {
-    console.error("Error fetching templates:", error)
+    console.error("[getPublicTemplates] ✗ Error fetching templates:", error)
     return { success: false, error: error instanceof Error ? error.message : "Failed to fetch templates" }
   }
 }
@@ -117,13 +122,16 @@ export async function getTemplateById(templateId: string) {
  * Load templates from emergent/rules directory
  */
 export async function loadEmergentTemplates() {
+  console.log("[loadEmergentTemplates] Server action called")
+  
   try {
     // In serverless environments, we can't use fs directly
     // Templates should be loaded at build time or stored in database
     // For now, this is a placeholder that can be enhanced
+    console.log("[loadEmergentTemplates] ⚠️ Placeholder implementation - returning empty array")
     return { success: true, data: [] }
   } catch (error) {
-    console.error("Error loading emergent templates:", error)
+    console.error("[loadEmergentTemplates] ✗ Error loading emergent templates:", error)
     return { success: false, error: error instanceof Error ? error.message : "Failed to load templates" }
   }
 }

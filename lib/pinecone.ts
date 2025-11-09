@@ -2,6 +2,8 @@ import { Pinecone } from "@pinecone-database/pinecone"
 
 let pineconeClient: Pinecone | null = null
 
+const DEFAULT_INDEX_NAME = process.env.PINECONE_INDEX || "inky-rules"
+
 export function getPineconeClient(): Pinecone {
   if (pineconeClient) {
     return pineconeClient
@@ -19,8 +21,10 @@ export function getPineconeClient(): Pinecone {
   return pineconeClient
 }
 
-export async function getPineconeIndex(indexName: string = "inky-rules") {
+export async function getPineconeIndex(indexName: string = DEFAULT_INDEX_NAME) {
   const client = getPineconeClient()
   return client.index(indexName)
 }
+
+
 

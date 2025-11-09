@@ -27,10 +27,16 @@ async function getOrCreateUser(clerkId: string) {
  * Save selected repository to database
  */
 export async function saveRepository(repo: GitHubRepo) {
+  console.log("[saveRepository] Server action called")
+  console.log("[saveRepository] Repository data:", { id: repo.id, name: repo.name, full_name: repo.full_name })
+  
   try {
+    console.log("[saveRepository] Authenticating user...")
     const { userId } = await auth()
+    console.log("[saveRepository] User ID:", userId ? "✓ Found" : "✗ Not found")
 
     if (!userId) {
+      console.error("[saveRepository] ✗ User not authenticated")
       return { success: false, error: "Not authenticated" }
     }
 
@@ -48,14 +54,19 @@ export async function saveRepository(repo: GitHubRepo) {
       html_url: repo.html_url,
     }
 
+    console.log("[saveRepository] Validating repository data...")
     const validated = saveRepositorySchema.parse(repoData)
+    console.log("[saveRepository] ✓ Validation passed")
 
     // Check if repository already exists
+    console.log("[saveRepository] Checking for existing repository...")
     const existing = await prisma.repository.findUnique({
       where: { github_id: validated.github_id },
     })
+    console.log("[saveRepository] Existing repository:", existing ? "✓ Found" : "✗ Not found")
 
     if (existing) {
+      console.log("[saveRepository] Updating existing repository...")
       // Update existing repository
       const updated = await prisma.repository.update({
         where: { id: existing.id },
@@ -73,6 +84,7 @@ export async function saveRepository(repo: GitHubRepo) {
       })
 
       // Deactivate other repositories for this user
+      console.log("[saveRepository] Deactivating other repositories...")
       await prisma.repository.updateMany({
         where: {
           user_id: user.id,
@@ -81,10 +93,12 @@ export async function saveRepository(repo: GitHubRepo) {
         data: { is_active: false },
       })
 
+      console.log("[saveRepository] ✅ Repository updated successfully")
       return { success: true, data: updated }
     }
 
     // Create new repository
+    console.log("[saveRepository] Creating new repository...")
     const newRepo = await prisma.repository.create({
       data: {
         user_id: user.id,
@@ -102,12 +116,15 @@ export async function saveRepository(repo: GitHubRepo) {
       data: { is_active: false },
     })
 
+    console.log("[saveRepository] ✅ Repository created successfully")
     return { success: true, data: newRepo }
   } catch (error) {
+    console.error("[saveRepository] ✗ Error occurred:", error)
     if (error instanceof z.ZodError) {
+      console.error("[saveRepository] Validation errors:", error.issues)
       return { success: false, error: "Validation failed", details: error.issues }
     }
-    console.error("Error saving repository:", error)
+    console.error("[saveRepository] ✗ Failed to save repository:", error)
     return { success: false, error: error instanceof Error ? error.message : "Failed to save repository" }
   }
 }
@@ -159,15 +176,23 @@ export async function getUserRepositories() {
  * Get active repository for user
  */
 export async function getActiveRepository() {
+  console.log("[getActiveRepository] Server action called")
+  
   try {
+    console.log("[getActiveRepository] Authenticating user...")
     const { userId } = await auth()
+    console.log("[getActiveRepository] User ID:", userId ? "✓ Found" : "✗ Not found")
 
     if (!userId) {
+      console.error("[getActiveRepository] ✗ User not authenticated")
       return { success: false, error: "Not authenticated" }
     }
 
+    console.log("[getActiveRepository] Getting or creating user...")
     const user = await getOrCreateUser(userId)
+    console.log("[getActiveRepository] User ID:", user.id)
 
+    console.log("[getActiveRepository] Fetching active repository...")
     const repository = await prisma.repository.findFirst({
       where: {
         user_id: user.id,
@@ -190,9 +215,11 @@ export async function getActiveRepository() {
       },
     })
 
+    console.log("[getActiveRepository] Repository:", repository ? `✓ Found: ${repository.full_name}` : "✗ Not found")
+    console.log("[getActiveRepository] ✅ Success")
     return { success: true, data: repository }
   } catch (error) {
-    console.error("Error fetching active repository:", error)
+    console.error("[getActiveRepository] ✗ Error fetching active repository:", error)
     return { success: false, error: error instanceof Error ? error.message : "Failed to fetch active repository" }
   }
 }
