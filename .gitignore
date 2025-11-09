@@ -44,3 +44,5 @@ next-env.d.ts
 lib/prisma
 
 prompt-list-for-emergent.md
+
+inky-mcp-server/
