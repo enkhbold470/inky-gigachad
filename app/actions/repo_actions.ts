@@ -6,7 +6,8 @@ import { saveRepositorySchema, type SaveRepositoryInput } from "@/lib/validation
 import type { GitHubRepo } from "@/lib/github"
 import { z } from "zod"
 import OpenAI from "openai"
-import { getAllMarkdownContext, getAllMarkdownContextWithInfo } from "@/lib/markdown-context"
+import { getAllMarkdownContext, getAllMarkdownContextWithInfo, getMarkdownContextFromRepositories } from "@/lib/markdown-context"
+import { indexMarkdownFilesToPinecone, generateRulesWithRAG } from "@/lib/rag"
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -202,13 +203,28 @@ export async function saveRepositories(repos: GitHubRepo[]) {
       data: { is_active: false },
     })
 
-    // Generate rule based on repositories with context from markdown files
-    console.log("[saveRepositories] Loading markdown context...")
-    const markdownContextResult = getAllMarkdownContextWithInfo()
-    const markdownContext = markdownContextResult.content
-    console.log("[saveRepositories] ✓ Loaded markdown context")
-    console.log("[saveRepositories] Found", markdownContextResult.totalFiles, "markdown files")
+    // Step 1: Get markdown files from selected repositories (public only)
+    console.log("[saveRepositories] Loading markdown files from selected repositories...")
+    const markdownContextResult = await getMarkdownContextFromRepositories(repos)
+    console.log("[saveRepositories] ✓ Loaded markdown files")
+    console.log("[saveRepositories] Found", markdownContextResult.totalFiles, "markdown files from public repositories")
 
+    // Step 2: Index markdown files to Pinecone
+    console.log("[saveRepositories] Indexing markdown files to Pinecone...")
+    const repositoryIds = savedRepos.map((r) => r.id)
+    const filesWithContent = markdownContextResult.filesWithContent || []
+
+    const indexingResult = await indexMarkdownFilesToPinecone(
+      filesWithContent.filter(f => f.content.length > 0),
+      user.id,
+      repositoryIds
+    )
+    console.log("[saveRepositories] ✅ Indexed", indexingResult.indexed, "chunks to Pinecone")
+    if (indexingResult.failed > 0) {
+      console.warn("[saveRepositories] ⚠️ Failed to index", indexingResult.failed, "chunks")
+    }
+
+    // Step 3: Generate rules using RAG
     const languages = savedRepos
       .map((r) => r.language)
       .filter((l): l is string => l !== null && l !== undefined)
@@ -221,58 +237,21 @@ export async function saveRepositories(repos: GitHubRepo[]) {
       description: r.description,
     }))
 
-    console.log("[saveRepositories] Generating rule with AI...")
+    console.log("[saveRepositories] Generating rules using RAG...")
     try {
-      const completion = await openai.chat.completions.create({
-        model: "gpt-4o",
-        messages: [
-          {
-            role: "system",
-            content: `You are an expert at analyzing code repositories and generating comprehensive coding rules and guidelines. Your task is to create detailed, actionable coding rules based on:
-1. The user's selected repositories
-2. Context from existing markdown documentation files
-
-Generate rules that are:
-- Specific and actionable
-- Based on patterns found in the repositories
-- Aligned with best practices from the markdown context
-- Well-structured and easy to follow
-- Focused on code style, architecture, and best practices`,
-          },
-          {
-            role: "user",
-            content: `Based on the following information, generate comprehensive coding rules:
-
-## Selected Repositories:
-${JSON.stringify(repoInfo, null, 2)}
-
-## Primary Languages Detected:
-${uniqueLanguages.join(", ")}
-
-## Context from Markdown Files:
-${markdownContext}
-
-Please generate detailed coding rules that:
-1. Reflect the coding patterns and preferences from the selected repositories
-2. Incorporate best practices from the markdown documentation context
-3. Are specific to the languages used (${uniqueLanguages.join(", ")})
-4. Include guidelines for code style, architecture, testing, and best practices
-5. Are formatted clearly and are easy to follow
-
-Return ONLY the rule content, no explanations or meta-commentary.`,
-          },
-        ],
-        temperature: 0.7,
-        max_tokens: 2000,
-      })
-
-      const ruleContent = completion.choices[0]?.message?.content?.trim()
+      const query = `Generate comprehensive coding rules based on these repositories: ${repoInfo.map(r => r.full_name).join(", ")}. Primary languages: ${uniqueLanguages.join(", ")}.`
+      
+      const ruleContent = await generateRulesWithRAG(
+        query,
+        user.id,
+        repositoryIds
+      )
 
       if (!ruleContent) {
-        throw new Error("No response from AI")
+        throw new Error("No response from RAG")
       }
 
-      console.log("[saveRepositories] ✅ Rule generated successfully")
+      console.log("[saveRepositories] ✅ Rules generated successfully using RAG")
 
       // Create generated rule
       const generatedRule = await prisma.rule.create({
@@ -293,6 +272,8 @@ Return ONLY the rule content, no explanations or meta-commentary.`,
           markdownFiles: markdownContextResult.files,
           totalMarkdownFiles: markdownContextResult.totalFiles,
           commands: markdownContextResult.commands,
+          indexedChunks: indexingResult.indexed,
+          failedChunks: indexingResult.failed,
         } 
       }
     } catch (aiError) {

@@ -1,13 +1,15 @@
 "use client"
 
-import { useRouter } from "next/navigation"
+import Link from "next/link"    
+import { useUser } from "@clerk/nextjs"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Github, ArrowRight } from "lucide-react"
 import { Header } from "@/components/header"
 
 export default function Home() {
-  const router = useRouter()
+
+  const { user, isLoaded } = useUser() // Clerk user
 
   return (
     <div>
@@ -43,13 +45,19 @@ export default function Home() {
               </li>
             </ul>
             <div className="flex flex-col sm:flex-row gap-4 mt-6">
-              <Button size="lg" className="w-full sm:w-auto" onClick={() => router.push("/sign-in")}>
-                <Github className="mr-2 size-5" />
-                Sign in with GitHub
-              </Button>
-              <Button variant="outline" size="lg" className="w-full sm:w-auto" onClick={() => router.push("/onboard")}>
-                <ArrowRight className="mr-2 size-5" />
-                Try Demo
+              {isLoaded && !user && (
+                <Button size="lg" className="w-full sm:w-auto" asChild>
+                  <Link href="/sign-in">
+                    <Github className="mr-2 size-5" />
+                    Sign in with GitHub
+                  </Link>
+                </Button>
+              )}
+              <Button variant="outline" size="lg" className="w-full sm:w-auto" asChild>
+                <Link href="/onboard">
+                  <ArrowRight className="mr-2 size-5" />
+                  {isLoaded && user ? "Go to Dashboard" : "Try Demo"}
+                </Link>
               </Button>
             </div>
           </CardContent>

@@ -134,14 +134,23 @@ export default function Dashboard() {
           }
         }
         
-        // Step 4: Generating rules with AI
+        // Step 4: Indexing to Pinecone
         setProgressStep(4)
-        setProgressMessage("Generating rules with AI...")
+        if (result.data.indexedChunks !== undefined) {
+          setProgressMessage(`Indexing ${result.data.indexedChunks} chunks to Pinecone...`)
+        } else {
+          setProgressMessage("Indexing markdown files to Pinecone...")
+        }
+        await new Promise(resolve => setTimeout(resolve, 1000))
+        
+        // Step 5: Generating rules with RAG
+        setProgressStep(5)
+        setProgressMessage("Generating rules using RAG...")
         await new Promise(resolve => setTimeout(resolve, 1000))
         
         if (result.data.generatedRule) {
           setGeneratedRule(result.data.generatedRule.content)
-          setProgressStep(5)
+          setProgressStep(6)
           setProgressMessage("Rules generated successfully!")
           await new Promise(resolve => setTimeout(resolve, 500))
           
@@ -556,8 +565,9 @@ export default function Dashboard() {
                 { step: 1, label: "Scanning for markdown files", icon: FileText },
                 { step: 2, label: "Saving repositories", icon: Github },
                 { step: 3, label: "Loading markdown files", icon: FileText },
-                { step: 4, label: "Generating rules with AI", icon: Loader2 },
-                { step: 5, label: "Complete", icon: CheckCircle2 },
+                { step: 4, label: "Indexing to Pinecone", icon: Loader2 },
+                { step: 5, label: "Generating rules with RAG", icon: Loader2 },
+                { step: 6, label: "Complete", icon: CheckCircle2 },
               ].map(({ step, label, icon: Icon }) => {
                 const isActive = progressStep === step
                 const isCompleted = progressStep > step
@@ -603,9 +613,9 @@ export default function Dashboard() {
 
             {/* Progress Bar */}
             <div className="space-y-2">
-              <Progress value={(progressStep / 5) * 100} className="h-2" />
+              <Progress value={(progressStep / 6) * 100} className="h-2" />
               <div className="text-xs text-muted-foreground text-center">
-                Step {progressStep} of 5
+                Step {progressStep} of 6
               </div>
             </div>
 

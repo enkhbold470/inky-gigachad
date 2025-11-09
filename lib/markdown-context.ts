@@ -1,6 +1,8 @@
 import { readFileSync } from "fs"
 import { join } from "path"
 import { readdirSync, statSync } from "fs"
+import { fetchMarkdownFilesFromRepo } from "@/lib/github"
+import type { GitHubRepo } from "@/lib/github"
 
 const MAX_FILE_SIZE = 100000 // ~100KB per file
 const MAX_TOTAL_SIZE = 500000 // ~500KB total context
@@ -16,6 +18,7 @@ export interface MarkdownContextResult {
   files: MarkdownFileInfo[]
   totalFiles: number
   commands: string[]
+  filesWithContent?: Array<{ path: string; content: string; size: number }>
 }
 
 /**
@@ -27,20 +30,28 @@ function findMarkdownFiles(dir: string, fileList: string[] = []): string[] {
 
     for (const file of files) {
       const filePath = join(dir, file)
-      const stat = statSync(filePath)
+      
+      try {
+        const stat = statSync(filePath)
 
-      if (stat.isDirectory()) {
-        // Skip node_modules and other common directories
-        if (
-          !file.startsWith(".") &&
-          file !== "node_modules" &&
-          file !== ".next" &&
-          file !== ".git"
-        ) {
-          findMarkdownFiles(filePath, fileList)
+        if (stat.isDirectory()) {
+          // Skip node_modules and other common directories
+          if (
+            !file.startsWith(".") &&
+            file !== "node_modules" &&
+            file !== ".next" &&
+            file !== ".git"
+          ) {
+            // Recursively search subdirectories
+            findMarkdownFiles(filePath, fileList)
+          }
+        } else if (file.endsWith(".md") || file.endsWith(".mdc")) {
+          fileList.push(filePath)
         }
-      } else if (file.endsWith(".md") || file.endsWith(".mdc")) {
-        fileList.push(filePath)
+      } catch (statError) {
+        // Skip files/directories we can't access
+        console.warn(`Cannot access ${filePath}:`, statError)
+        continue
       }
     }
   } catch (error) {
@@ -54,14 +65,20 @@ function findMarkdownFiles(dir: string, fileList: string[] = []): string[] {
  * Get markdown files metadata (for progress display)
  */
 export function getMarkdownFilesInfo(): { files: MarkdownFileInfo[]; commands: string[] } {
+  // Use process.cwd() which should be the project root in Next.js
+  // In production, this might be different, so we ensure we're in the right place
   const projectRoot = process.cwd()
   const commands: string[] = []
+  
+  console.log(`[getMarkdownFilesInfo] Scanning for markdown files in: ${projectRoot}`)
   
   // Simulate Linux commands that would be used
   commands.push(`find ${projectRoot} -type f \\( -name "*.md" -o -name "*.mdc" \\) -not -path "*/node_modules/*" -not -path "*/.next/*" -not -path "*/.git/*"`)
   commands.push(`ls -la ${projectRoot}`)
   
   const markdownFiles = findMarkdownFiles(projectRoot)
+  console.log(`[getMarkdownFilesInfo] Found ${markdownFiles.length} markdown files`)
+  
   const fileInfos: MarkdownFileInfo[] = []
 
   for (const filePath of markdownFiles) {
@@ -81,6 +98,7 @@ export function getMarkdownFilesInfo(): { files: MarkdownFileInfo[]; commands: s
     }
   }
 
+  console.log(`[getMarkdownFilesInfo] Returning ${fileInfos.length} file infos`)
   return { files: fileInfos, commands }
 }
 
@@ -127,18 +145,21 @@ export function getAllMarkdownContext(): string {
  * Get markdown context with metadata for progress display
  */
 export function getAllMarkdownContextWithInfo(): MarkdownContextResult {
-  const projectRoot = process.cwd()
   const { files: fileInfos, commands } = getMarkdownFilesInfo()
+  
+  console.log(`[getAllMarkdownContextWithInfo] Processing ${fileInfos.length} markdown files`)
   
   const contexts: string[] = []
   let totalSize = 0
   const processedFiles: MarkdownFileInfo[] = []
+  let skippedCount = 0
 
   for (const fileInfo of fileInfos) {
     try {
       // Skip files that are too large
       if (fileInfo.size > MAX_FILE_SIZE) {
         console.warn(`Skipping large file: ${fileInfo.path} (${fileInfo.size} bytes)`)
+        skippedCount++
         continue
       }
 
@@ -154,14 +175,103 @@ export function getAllMarkdownContextWithInfo(): MarkdownContextResult {
       processedFiles.push(fileInfo)
     } catch (error) {
       console.error(`Error reading file ${fileInfo.path}:`, error)
+      skippedCount++
     }
   }
+
+  const totalFiles = fileInfos.length
+  console.log(`[getAllMarkdownContextWithInfo] Total files found: ${totalFiles}, Processed: ${processedFiles.length}, Skipped: ${skippedCount}`)
 
   return {
     content: contexts.join("\n\n"),
     files: processedFiles,
-    totalFiles: fileInfos.length,
+    totalFiles: totalFiles, // Return actual count of all files found, not just processed
     commands,
+  }
+}
+
+/**
+ * Get markdown context from GitHub repositories
+ * Only scans public repositories
+ */
+export async function getMarkdownContextFromRepositories(
+  repositories: GitHubRepo[]
+): Promise<MarkdownContextResult> {
+  // Filter to only public repositories
+  const publicRepos = repositories.filter((repo) => !repo.private)
+  
+  console.log(`[getMarkdownContextFromRepositories] Processing ${publicRepos.length} public repositories`)
+  
+  const allFiles: MarkdownFileInfo[] = []
+  const commands: string[] = []
+  const contexts: string[] = []
+  const filesWithContent: Array<{ path: string; content: string; size: number }> = []
+  let totalSize = 0
+  const processedFiles: MarkdownFileInfo[] = []
+
+  // Process each repository
+  for (const repo of publicRepos) {
+    const [owner, repoName] = repo.full_name.split("/")
+    
+    try {
+      console.log(`[getMarkdownContextFromRepositories] Fetching markdown files from ${repo.full_name}`)
+      
+      // Add command for this repo
+      commands.push(`git clone https://github.com/${repo.full_name}.git`)
+      commands.push(`find ${repo.full_name} -type f \\( -name "*.md" -o -name "*.mdc" \\) -not -path "*/node_modules/*" -not -path "*/.next/*" -not -path "*/.git/*"`)
+      
+      const markdownFiles = await fetchMarkdownFilesFromRepo(owner, repoName)
+      
+      console.log(`[getMarkdownContextFromRepositories] Found ${markdownFiles.length} markdown files in ${repo.full_name}`)
+      
+      for (const file of markdownFiles) {
+        const relativePath = `${repo.full_name}/${file.path}`
+        
+        // Skip files that are too large
+        if (file.size > MAX_FILE_SIZE) {
+          console.warn(`Skipping large file: ${relativePath} (${file.size} bytes)`)
+          continue
+        }
+
+        // Stop if we've reached the total size limit
+        if (totalSize + file.size > MAX_TOTAL_SIZE) {
+          console.warn(`Reached total size limit, stopping at ${totalSize} bytes`)
+          break
+        }
+
+        const fileInfo: MarkdownFileInfo = {
+          path: relativePath,
+          relativePath,
+          size: file.size,
+        }
+
+        allFiles.push(fileInfo)
+        contexts.push(`\n--- File: ${relativePath} ---\n${file.content}\n`)
+        filesWithContent.push({
+          path: relativePath,
+          content: file.content,
+          size: file.size,
+        })
+        totalSize += file.size
+        processedFiles.push(fileInfo)
+        
+        commands.push(`cat "${relativePath}"`)
+      }
+    } catch (error) {
+      console.error(`[getMarkdownContextFromRepositories] Error processing ${repo.full_name}:`, error)
+      // Continue with other repositories
+    }
+  }
+
+  const totalFiles = allFiles.length
+  console.log(`[getMarkdownContextFromRepositories] Total files found: ${totalFiles}, Processed: ${processedFiles.length}`)
+
+  return {
+    content: contexts.join("\n\n"),
+    files: processedFiles,
+    totalFiles: totalFiles,
+    commands,
+    filesWithContent,
   }
 }
 
