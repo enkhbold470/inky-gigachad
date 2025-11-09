@@ -12,7 +12,7 @@ import { getRepositories } from "@/app/actions/random"
 import { saveRepositories } from "@/app/actions/repo_actions"
 import { createRule } from "@/app/actions/rule_actions"
 import { getPublicTemplates } from "@/app/actions/template_actions"
-import { Github, ThumbsUp, Copy, CheckCircle2, ArrowRight } from "lucide-react"
+import { Github, ThumbsUp, Copy, CheckCircle2, ArrowRight, Loader2 } from "lucide-react"
 import type { GitHubRepo } from "@/lib/github"
 import type { RuleTemplate } from "@/lib/types"
 import { toast } from "sonner"
@@ -31,6 +31,7 @@ export default function Dashboard() {
   const [saving, setSaving] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
   const [generatedRule, setGeneratedRule] = useState<string>("")
+  const [generatingRules, setGeneratingRules] = useState(false)
 
   const loadData = useCallback(async () => {
     if (!isLoaded || !user) return
@@ -68,14 +69,13 @@ export default function Dashboard() {
     setSelectedRepos(newSelected)
   }
 
-  const handleNextTab = () => {
+  const handleNextTab = async () => {
     if (activeTab === "repositories") {
       if (selectedRepos.size === 0) {
         toast.error("Please select at least one repository")
         return
       }
-      generateRulesFromRepos()
-      setActiveTab("rules")
+      await handleSaveRepositoriesAndGenerateRules()
     } else if (activeTab === "rules") {
       setActiveTab("tools")
     } else if (activeTab === "tools") {
@@ -83,28 +83,25 @@ export default function Dashboard() {
     }
   }
 
-  const generateRulesFromRepos = () => {
-    const selectedReposData = githubRepos.filter((repo) => selectedRepos.has(repo.id))
-    const languages = selectedReposData
-      .map((r) => r.language)
-      .filter((l): l is string => l !== null && l !== undefined)
-    const uniqueLanguages = [...new Set(languages)]
-
-    const ruleContent = `Based on your selected repositories, here are your coding preferences:
-
-Primary Languages: ${uniqueLanguages.join(", ") || "TypeScript"}
-
-Guidelines:
-- Use ${uniqueLanguages[0] || "TypeScript"} for all new files
-- Follow consistent code style across all repositories
-- Maintain clean architecture and separation of concerns
-- Write comprehensive tests for critical functionality
-- Document complex logic and APIs
-- Use modern best practices for ${uniqueLanguages.join(" and ") || "TypeScript"}
-
-This rule was automatically generated based on your repository selection.`
-
-    setGeneratedRule(ruleContent)
+  const handleSaveRepositoriesAndGenerateRules = async () => {
+    setGeneratingRules(true)
+    try {
+      const reposToSave = githubRepos.filter((repo) => selectedRepos.has(repo.id))
+      const result = await saveRepositories(reposToSave)
+      
+      if (result.success && result.data?.generatedRule) {
+        setGeneratedRule(result.data.generatedRule.content)
+        toast.success("Repositories saved and rules generated!")
+        setActiveTab("rules")
+      } else {
+        toast.error(result.error || "Failed to save repositories")
+      }
+    } catch (error) {
+      console.error("Error saving repositories:", error)
+      toast.error("Failed to save repositories")
+    } finally {
+      setGeneratingRules(false)
+    }
   }
 
   const handleTemplateToggle = (templateId: string) => {
@@ -145,17 +142,7 @@ This rule was automatically generated based on your repository selection.`
 
     setSaving(true)
     try {
-      // Save repositories
-      const reposToSave = githubRepos.filter((repo) => selectedRepos.has(repo.id))
-      await saveRepositories(reposToSave)
-
-      // Create generated rule if exists
-      if (generatedRule) {
-        await createRule({
-          name: "Generated Rules from Repositories",
-          content: generatedRule,
-        })
-      }
+      // Repositories are already saved, just create rules from selected templates
 
       // Create rules from selected templates
       for (const templateId of selectedTemplates) {
@@ -276,7 +263,7 @@ This rule was automatically generated based on your repository selection.`
                       githubRepos.map((repo) => (
                         <div
                           key={repo.id}
-                          className={`flex items-center gap-3 p-3 border rounded-lg hover:bg-accent cursor-pointer ${
+                          className={`flex items-center gap-3 p-3 border rounded-lg hover:bg-accent cursor-pointer transition-colors ${
                             selectedRepos.has(repo.id) ? "bg-accent border-primary" : ""
                           }`}
                           onClick={() => handleRepoToggle(repo.id)}
@@ -284,16 +271,15 @@ This rule was automatically generated based on your repository selection.`
                           <Checkbox
                             checked={selectedRepos.has(repo.id)}
                             onCheckedChange={() => handleRepoToggle(repo.id)}
+                            onClick={(e) => e.stopPropagation()}
                           />
+                          {repo.language && (
+                            <Badge variant="outline" className="text-xs shrink-0 min-w-[60px] justify-center">
+                              {repo.language}
+                            </Badge>
+                          )}
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              {repo.language && (
-                                <Badge variant="outline" className="text-xs">
-                                  {repo.language}
-                                </Badge>
-                              )}
-                              <div className="font-medium truncate">{repo.full_name}</div>
-                            </div>
+                            <div className="font-medium truncate">{repo.full_name}</div>
                             {repo.description && (
                               <div className="text-sm text-muted-foreground truncate mt-1">
                                 {repo.description}
@@ -308,8 +294,20 @@ This rule was automatically generated based on your repository selection.`
                     )}
                   </div>
                   <div className="mt-4 flex justify-end">
-                    <Button onClick={handleNextTab} disabled={selectedRepos.size === 0 || saving}>
-                      Next: Rules <ArrowRight className="size-4 ml-2" />
+                    <Button 
+                      onClick={handleNextTab} 
+                      disabled={selectedRepos.size === 0 || generatingRules || saving}
+                    >
+                      {generatingRules ? (
+                        <>
+                          <Loader2 className="size-4 animate-spin mr-2" />
+                          Generating Rules...
+                        </>
+                      ) : (
+                        <>
+                          Next: Rules <ArrowRight className="size-4 ml-2" />
+                        </>
+                      )}
                     </Button>
                   </div>
                 </CardContent>
@@ -332,9 +330,15 @@ This rule was automatically generated based on your repository selection.`
                       <h3 className="text-sm font-semibold mb-3">Your Auto-Generated Rules</h3>
                       <Card className="bg-primary/5 border-primary/20">
                         <CardContent className="pt-4">
-                          <pre className="text-sm whitespace-pre-wrap">{generatedRule}</pre>
+                          <pre className="text-sm whitespace-pre-wrap font-mono">{generatedRule}</pre>
                         </CardContent>
                       </Card>
+                    </div>
+                  )}
+                  
+                  {!generatedRule && (
+                    <div className="mb-6 text-center text-muted-foreground text-sm py-4">
+                      Select repositories in the previous step to generate rules
                     </div>
                   )}
 
