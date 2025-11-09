@@ -239,7 +239,7 @@ export default function Dashboard() {
         // Stdio Transport config (Option 2)
         // Extract base URL from apiUrl (remove /api/mcp suffix)
         const apiUrl = result.data.apiUrl || ""
-        const baseUrl = apiUrl.replace(/\/api\/mcp\/?$/, "") || "https://font-upgrade.emergent.host"
+        const baseUrl = apiUrl.replace(/\/api\/mcp\/?$/, "") || "https://config-central-5.preview.emergentagent.com"
         const stdioConfig = {
           mcpServers: {
             inky: {
