@@ -63,6 +63,7 @@ export async function saveRepository(repo: GitHubRepo) {
     const existing = await prisma.repository.findUnique({
       where: { github_id: validated.github_id },
     })
+
     console.log("[saveRepository] Existing repository:", existing ? "✓ Found" : "✗ Not found")
 
     if (existing) {
@@ -121,11 +122,115 @@ export async function saveRepository(repo: GitHubRepo) {
   } catch (error) {
     console.error("[saveRepository] ✗ Error occurred:", error)
     if (error instanceof z.ZodError) {
-      console.error("[saveRepository] Validation errors:", error.issues)
-      return { success: false, error: "Validation failed", details: error.issues }
+      return { success: false, error: error.issues.map((i) => i.message).join(", ") }
     }
-    console.error("[saveRepository] ✗ Failed to save repository:", error)
     return { success: false, error: error instanceof Error ? error.message : "Failed to save repository" }
+  }
+}
+
+/**
+ * Save multiple repositories and generate rules based on them
+ */
+export async function saveRepositories(repos: GitHubRepo[]) {
+  console.log("[saveRepositories] Server action called")
+  console.log("[saveRepositories] Repositories count:", repos.length)
+  
+  try {
+    const { userId } = await auth()
+
+    if (!userId) {
+      return { success: false, error: "Not authenticated" }
+    }
+
+    const user = await getOrCreateUser(userId)
+
+    // Save all repositories
+    const savedRepos = []
+    for (const repo of repos) {
+      const repoData: SaveRepositoryInput = {
+        github_id: repo.id,
+        name: repo.name,
+        full_name: repo.full_name,
+        owner: repo.owner.login,
+        description: repo.description,
+        language: repo.language,
+        stars: repo.stargazers_count,
+        is_private: repo.private,
+        html_url: repo.html_url,
+      }
+
+      const validated = saveRepositorySchema.parse(repoData)
+
+      const existing = await prisma.repository.findUnique({
+        where: { github_id: validated.github_id },
+      })
+
+      if (existing) {
+        const updated = await prisma.repository.update({
+          where: { id: existing.id },
+          data: {
+            ...validated,
+            is_active: true,
+          },
+        })
+        savedRepos.push(updated)
+      } else {
+        const newRepo = await prisma.repository.create({
+          data: {
+            user_id: user.id,
+            ...validated,
+            is_active: true,
+          },
+        })
+        savedRepos.push(newRepo)
+      }
+    }
+
+    // Deactivate repositories not in the selected list
+    const savedRepoIds = savedRepos.map((r) => r.id)
+    await prisma.repository.updateMany({
+      where: {
+        user_id: user.id,
+        id: { notIn: savedRepoIds },
+      },
+      data: { is_active: false },
+    })
+
+    // Generate rule based on repositories
+    const languages = savedRepos
+      .map((r) => r.language)
+      .filter((l): l is string => l !== null && l !== undefined)
+    const uniqueLanguages = [...new Set(languages)]
+    
+    const ruleContent = `Based on your selected repositories, here are your coding preferences:
+
+Primary Languages: ${uniqueLanguages.join(", ")}
+
+Guidelines:
+- Use ${uniqueLanguages[0] || "TypeScript"} for all new files
+- Follow consistent code style across all repositories
+- Maintain clean architecture and separation of concerns
+- Write comprehensive tests for critical functionality
+- Document complex logic and APIs
+- Use modern best practices for ${uniqueLanguages.join(" and ")}
+
+This rule was automatically generated based on your repository selection.`
+
+    // Create generated rule
+    const generatedRule = await prisma.rule.create({
+      data: {
+        user_id: user.id,
+        name: "Generated Rules from Repositories",
+        content: ruleContent,
+        version: 1,
+      },
+    })
+
+    console.log("[saveRepositories] ✅ Repositories and rule saved successfully")
+    return { success: true, data: { repositories: savedRepos, generatedRule } }
+  } catch (error) {
+    console.error("[saveRepositories] ✗ Error occurred:", error)
+    return { success: false, error: error instanceof Error ? error.message : "Failed to save repositories" }
   }
 }
 
@@ -215,12 +320,10 @@ export async function getActiveRepository() {
       },
     })
 
-    console.log("[getActiveRepository] Repository:", repository ? `✓ Found: ${repository.full_name}` : "✗ Not found")
-    console.log("[getActiveRepository] ✅ Success")
+    console.log("[getActiveRepository] Active repository:", repository ? "✓ Found" : "✗ Not found")
     return { success: true, data: repository }
   } catch (error) {
-    console.error("[getActiveRepository] ✗ Error fetching active repository:", error)
+    console.error("[getActiveRepository] ✗ Error occurred:", error)
     return { success: false, error: error instanceof Error ? error.message : "Failed to fetch active repository" }
   }
 }
-
