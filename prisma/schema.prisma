@@ -57,6 +57,7 @@ model RuleTemplate {
   content       String       @db.Text
   category      String?
   author        String?
+  x_account     String?
   is_public     Boolean      @default(true)
   created_at    DateTime     @default(now())
   updated_at    DateTime     @updatedAt

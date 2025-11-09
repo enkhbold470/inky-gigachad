@@ -15,12 +15,21 @@ import { saveRepositories } from "@/app/actions/repo_actions"
 import { createRule } from "@/app/actions/rule_actions"
 import { getPublicTemplates } from "@/app/actions/template_actions"
 import { getMCPConfig } from "@/app/actions/mcp_actions"
-import { Github, ThumbsUp, Copy, CheckCircle2, ArrowRight, Loader2, Terminal, FileText } from "lucide-react"
+import { Github, ThumbsUp, Copy, CheckCircle2, ArrowRight, Loader2, Terminal, FileText, User, ExternalLink } from "lucide-react"
 import type { GitHubRepo } from "@/lib/github"
 import type { RuleTemplate } from "@/lib/types"
 import { toast } from "sonner"
 
 type TabValue = "repositories" | "rules" | "tools"
+
+// Add Emergent.sh to selectable tools
+const TOOL_OPTIONS = [
+  "Windsurf",
+  "Cursor",
+  "Claude Code",
+  "CodeX",
+  "Emergent.sh",
+]
 
 export default function Dashboard() {
   const { user, isLoaded } = useUser()
@@ -41,10 +50,19 @@ export default function Dashboard() {
   const [markdownFilesCount, setMarkdownFilesCount] = useState(0)
   const [commands, setCommands] = useState<string[]>([])
   const [currentCommand, setCurrentCommand] = useState("")
+  const [processingDetails, setProcessingDetails] = useState<{
+    repositories?: Array<{ name: string; filesFound?: number; filesProcessed?: number }>
+    files?: Array<{ path: string; chunks?: number; status?: string }>
+    totalChunks?: number
+    indexedChunks?: number
+    failedChunks?: number
+    logs?: Array<{ level: string; message: string; timestamp: number }>
+  }>({})
   const [mcpConfig, setMcpConfig] = useState<string>("")
   const [mcpConfigStdio, setMcpConfigStdio] = useState<string>("")
   const [loadingMcpConfig, setLoadingMcpConfig] = useState(false)
   const [mcpConfigMethod, setMcpConfigMethod] = useState<"http" | "stdio">("http")
+  const [selectedTemplateForView, setSelectedTemplateForView] = useState<RuleTemplate | null>(null)
 
   const loadData = useCallback(async () => {
     if (!isLoaded || !user) return
@@ -130,6 +148,11 @@ export default function Dashboard() {
           setProgressMessage(`Found ${result.data.totalMarkdownFiles} markdown file(s)`)
         }
         
+        // Update processing details
+        if (result.data.processingDetails) {
+          setProcessingDetails(result.data.processingDetails)
+        }
+        
         if (result.data.commands) {
           setCommands(result.data.commands)
           // Show commands one by one
@@ -142,7 +165,8 @@ export default function Dashboard() {
         // Step 4: Indexing to Pinecone
         setProgressStep(4)
         if (result.data.indexedChunks !== undefined) {
-          setProgressMessage(`Indexing ${result.data.indexedChunks} chunks to Pinecone...`)
+          const failed = result.data.failedChunks || 0
+          setProgressMessage(`Indexed ${result.data.indexedChunks} chunks to Pinecone${failed > 0 ? ` (${failed} failed)` : ''}`)
         } else {
           setProgressMessage("Indexing markdown files to Pinecone...")
         }
@@ -215,7 +239,7 @@ export default function Dashboard() {
         // Stdio Transport config (Option 2)
         // Extract base URL from apiUrl (remove /api/mcp suffix)
         const apiUrl = result.data.apiUrl || ""
-        const baseUrl = apiUrl.replace(/\/api\/mcp\/?$/, "") || "http://localhost:3000"
+        const baseUrl = apiUrl.replace(/\/api\/mcp\/?$/, "") || "https://font-upgrade.emergent.host"
         const stdioConfig = {
           mcpServers: {
             inky: {
@@ -241,7 +265,6 @@ export default function Dashboard() {
     }
   }, [isLoaded, user])
 
-  // Load MCP config when tools tab is selected or tool is selected
   useEffect(() => {
     if (activeTab === "tools" || selectedTool) {
       if (!mcpConfig && !mcpConfigStdio && !loadingMcpConfig) {
@@ -258,9 +281,6 @@ export default function Dashboard() {
 
     setSaving(true)
     try {
-      // Repositories are already saved, just create rules from selected templates
-
-      // Create rules from selected templates
       for (const templateId of selectedTemplates) {
         const template = templates.find((t) => t.id === templateId)
         if (template) {
@@ -473,7 +493,7 @@ export default function Dashboard() {
                             className={`cursor-pointer hover:border-primary transition-colors ${
                               selectedTemplates.has(template.id) ? "border-primary bg-primary/5" : ""
                             }`}
-                            onClick={() => handleTemplateToggle(template.id)}
+                            onClick={() => setSelectedTemplateForView(template)}
                           >
                             <CardContent className="pt-4">
                               <div className="flex items-start justify-between gap-2">
@@ -482,6 +502,7 @@ export default function Dashboard() {
                                     <Checkbox
                                       checked={selectedTemplates.has(template.id)}
                                       onCheckedChange={() => handleTemplateToggle(template.id)}
+                                      onClick={(e) => e.stopPropagation()}
                                     />
                                     <h4 className="font-medium">{template.name}</h4>
                                   </div>
@@ -494,6 +515,29 @@ export default function Dashboard() {
                                     <Badge variant="secondary" className="mt-2 text-xs">
                                       {template.category}
                                     </Badge>
+                                  )}
+                                  {(template.author || template.x_account) && (
+                                    <div className="flex items-center gap-2 mt-2 text-xs">
+                                      {template.author && (
+                                        <div className="flex items-center gap-1">
+                                          <User className="size-3" />
+                                          <span>{template.author}</span>
+                                        </div>
+                                      )}
+                                      {template.x_account && (
+                                        <a
+                                          href={`https://x.com/${template.x_account.replace(/^@/, '')}`}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          onClick={(e) => e.stopPropagation()}
+                                          className="flex items-center gap-1 hover:text-primary transition-colors"
+                                        >
+                                          <span className="text-xs">𝕏</span>
+                                          <span>{template.x_account}</span>
+                                          <ExternalLink className="size-3" />
+                                        </a>
+                                      )}
+                                    </div>
                                   )}
                                 </div>
                                 <Button
@@ -537,7 +581,7 @@ export default function Dashboard() {
                 <CardContent>
                   <div className="space-y-4">
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                      {["Windsurf", "Cursor", "Claude Code", "CodeX"].map((tool) => (
+                      {TOOL_OPTIONS.map((tool) => (
                         <Button
                           key={tool}
                           variant={selectedTool === tool ? "default" : "outline"}
@@ -683,6 +727,37 @@ export default function Dashboard() {
                           Found {markdownFilesCount} markdown file{markdownFilesCount !== 1 ? "s" : ""}
                         </div>
                       )}
+                      {step === 3 && processingDetails.repositories && processingDetails.repositories.length > 0 && (
+                        <div className="text-xs text-muted-foreground mt-2 space-y-1">
+                          {processingDetails.repositories.map((repo, idx) => (
+                            <div key={idx} className="flex items-center gap-2">
+                              <span className="font-mono">•</span>
+                              <span>{repo.name}: {repo.filesFound} file{repo.filesFound !== 1 ? 's' : ''} found, {repo.filesProcessed} processed</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {step === 4 && processingDetails.files && processingDetails.files.length > 0 && (
+                        <div className="text-xs text-muted-foreground mt-2 space-y-1 max-h-32 overflow-y-auto">
+                          {processingDetails.files.slice(0, 5).map((file, idx) => (
+                            <div key={idx} className="flex items-center gap-2">
+                              <span className="font-mono">•</span>
+                              <span className="truncate">{file.path.split('/').pop()}</span>
+                              {file.chunks && (
+                                <span className="text-xs">({file.chunks} chunk{file.chunks !== 1 ? 's' : ''})</span>
+                              )}
+                            </div>
+                          ))}
+                          {processingDetails.files.length > 5 && (
+                            <div className="text-xs italic">...and {processingDetails.files.length - 5} more files</div>
+                          )}
+                          {processingDetails.totalChunks && (
+                            <div className="text-xs font-medium mt-1 pt-1 border-t">
+                              Total: {processingDetails.totalChunks} chunks across {processingDetails.files.length} files
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 )
@@ -696,6 +771,35 @@ export default function Dashboard() {
                 Step {progressStep} of 6
               </div>
             </div>
+
+            {/* Logs Display */}
+            {processingDetails.logs && processingDetails.logs.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <FileText className="size-4" />
+                  <span>Processing Logs</span>
+                </div>
+                <div className="bg-muted rounded-lg p-4 max-h-64 overflow-y-auto">
+                  <div className="space-y-1 font-mono text-xs">
+                    {processingDetails.logs.map((log, idx) => (
+                      <div 
+                        key={idx} 
+                        className={`p-1.5 rounded flex items-start gap-2 ${
+                          log.level === 'error' ? 'text-red-600 dark:text-red-400' :
+                          log.level === 'warn' ? 'text-yellow-600 dark:text-yellow-400' :
+                          'text-muted-foreground'
+                        }`}
+                      >
+                        <span className="shrink-0">
+                          {log.level === 'error' ? '✗' : log.level === 'warn' ? '⚠' : '•'}
+                        </span>
+                        <span className="flex-1 break-words">{log.message}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Commands Display */}
             {commands.length > 0 && (
@@ -725,6 +829,52 @@ export default function Dashboard() {
                 </div>
               </div>
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Template Rule View Dialog */}
+      <Dialog open={!!selectedTemplateForView} onOpenChange={(open) => !open && setSelectedTemplateForView(null)}>
+        <DialogContent className="max-w-4xl max-h-[90vh]">
+          <DialogHeader>
+            <DialogTitle>{selectedTemplateForView?.name}</DialogTitle>
+            {selectedTemplateForView?.description && (
+              <DialogDescription>
+                {selectedTemplateForView.description}
+              </DialogDescription>
+            )}
+          </DialogHeader>
+          {(selectedTemplateForView?.category || selectedTemplateForView?.author || selectedTemplateForView?.x_account) && (
+            <div className="flex items-center gap-3 flex-wrap px-6 pb-4">
+              {selectedTemplateForView?.category && (
+                <Badge variant="secondary">
+                  {selectedTemplateForView.category}
+                </Badge>
+              )}
+              {selectedTemplateForView?.author && (
+                <div className="flex items-center gap-1 text-sm">
+                  <User className="size-4" />
+                  <span>{selectedTemplateForView.author}</span>
+                </div>
+              )}
+              {selectedTemplateForView?.x_account && (
+                <a
+                  href={`https://x.com/${selectedTemplateForView.x_account.replace(/^@/, '')}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-sm hover:text-primary transition-colors"
+                >
+                  <span>𝕏</span>
+                  <span>{selectedTemplateForView.x_account}</span>
+                  <ExternalLink className="size-3" />
+                </a>
+              )}
+            </div>
+          )}
+          <div className="mt-4 overflow-y-auto max-h-[calc(90vh-120px)]">
+            <pre className="text-sm whitespace-pre-wrap font-mono bg-muted p-4 rounded-lg">
+              {selectedTemplateForView?.content}
+            </pre>
           </div>
         </DialogContent>
       </Dialog>

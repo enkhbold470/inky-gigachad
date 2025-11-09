@@ -34,6 +34,8 @@ export interface RuleTemplate {
   description: string | null
   content: string
   category: string | null
+  author: string | null
+  x_account: string | null
   created_at: Date
 }
 

@@ -7,7 +7,8 @@ const industryLeaderRules = [
     name: 'Full-Stack Next.js Best Practices',
     description: 'Comprehensive rules for building production-ready Next.js applications',
     category: 'Full-Stack',
-    author: 'cursor.directory',
+    author: 'Guillermo Rauch',
+    x_account: '@rauchg',
     content: `# Full-Stack Next.js Best Practices
 
 ## Code Style
@@ -44,7 +45,8 @@ const industryLeaderRules = [
     name: 'Backend API Design Patterns',
     description: 'Best practices for designing robust RESTful APIs',
     category: 'Backend',
-    author: 'cursor.directory',
+    author: 'Ryan Dahl',
+    x_account: '@ry',
     content: `# Backend API Design Patterns
 
 ## API Structure
@@ -75,7 +77,8 @@ const industryLeaderRules = [
     name: 'React Native Mobile Development',
     description: 'Guidelines for building cross-platform mobile apps',
     category: 'Mobile',
-    author: 'cursor.directory',
+    author: 'React Native Team',
+    x_account: '@reactnative',
     content: `# React Native Mobile Development
 
 ## Code Style
@@ -106,7 +109,8 @@ const industryLeaderRules = [
     name: 'TypeScript Advanced Patterns',
     description: 'Advanced TypeScript patterns for type safety',
     category: 'TypeScript',
-    author: 'cursor.directory',
+    author: 'Ryan Cavanaugh',
+    x_account: '@RyanCavanaugh',
     content: `# TypeScript Advanced Patterns
 
 ## Type Safety
@@ -137,7 +141,8 @@ const industryLeaderRules = [
     name: 'Database Design & Optimization',
     description: 'Best practices for database schema design and query optimization',
     category: 'Database',
-    author: 'cursor.directory',
+    author: 'Prisma Team',
+    x_account: '@prisma',
     content: `# Database Design & Optimization
 
 ## Schema Design
@@ -168,7 +173,8 @@ const industryLeaderRules = [
     name: 'Frontend Performance Optimization',
     description: 'Techniques for optimizing React and Next.js applications',
     category: 'Frontend',
-    author: 'cursor.directory',
+    author: 'Addy Osmani',
+    x_account: '@addyosmani',
     content: `# Frontend Performance Optimization
 
 ## React Optimization
@@ -199,7 +205,8 @@ const industryLeaderRules = [
     name: 'Security Best Practices',
     description: 'Comprehensive security guidelines for web applications',
     category: 'Security',
-    author: 'cursor.directory',
+    author: 'OWASP',
+    x_account: '@owasp',
     content: `# Security Best Practices
 
 ## Authentication & Authorization
@@ -230,7 +237,8 @@ const industryLeaderRules = [
     name: 'Testing Strategies',
     description: 'Comprehensive testing approaches for modern applications',
     category: 'Testing',
-    author: 'cursor.directory',
+    author: 'Kent C. Dodds',
+    x_account: '@kentcdodds',
     content: `# Testing Strategies
 
 ## Unit Testing
@@ -261,7 +269,8 @@ const industryLeaderRules = [
     name: 'DevOps & Deployment',
     description: 'Best practices for CI/CD and deployment workflows',
     category: 'DevOps',
-    author: 'cursor.directory',
+    author: 'Vercel',
+    x_account: '@vercel',
     content: `# DevOps & Deployment
 
 ## CI/CD Pipeline
@@ -293,6 +302,7 @@ const industryLeaderRules = [
     description: 'Guidelines for writing maintainable and scalable code',
     category: 'Best Practices',
     author: 'cursor.directory',
+    x_account: '@cursordotdir',
     content: `# Code Quality & Maintainability
 
 ## Code Organization
@@ -333,6 +343,7 @@ async function main() {
           content: rule.content,
           category: rule.category,
           author: rule.author,
+          x_account: rule.x_account,
         },
         create: rule,
       });
