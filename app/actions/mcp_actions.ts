@@ -84,21 +84,28 @@ export async function getMCPConfig() {
       },
     })
 
+    // Get the base URL for the API
+    const baseUrl =
+      process.env.NEXT_PUBLIC_APP_URL ||
+      (process.env.VERCEL_URL
+        ? `https://${process.env.VERCEL_URL}`
+        : "http://localhost:3000")
+
     return {
       success: true,
       data: {
         config: {
           mcpServers: {
             inky: {
-              command: "npx",
-              args: ["-y", "@enkhbold470/inky-mcp-server"],
-              env: {
-                API_KEY: token,
+              url: `${baseUrl}/api/mcp`,
+              headers: {
+                Authorization: `Bearer ${token}`,
               },
             },
           },
         },
         token,
+        apiUrl: `${baseUrl}/api/mcp`,
       },
     }
   } catch (error) {
@@ -106,6 +113,42 @@ export async function getMCPConfig() {
     return {
       success: false,
       error: error instanceof Error ? error.message : "Failed to get MCP config",
+    }
+  }
+}
+
+/**
+ * Get current MCP access token (if exists)
+ * Returns null if no token exists
+ */
+export async function getCurrentMCPToken() {
+  try {
+    const { userId } = await auth()
+    if (!userId) {
+      return { success: false, error: "Not authenticated" }
+    }
+
+    const user = await getOrCreateUser(userId)
+
+    if (!user.mcp_access_token) {
+      return { success: true, data: { token: null, hasToken: false } }
+    }
+
+    // We can't retrieve the original token from hash, so we indicate it exists
+    return {
+      success: true,
+      data: {
+        token: null, // Original token cannot be retrieved
+        hasToken: true,
+        createdAt: user.mcp_token_created_at,
+      },
+    }
+  } catch (error) {
+    console.error("[getCurrentMCPToken] Error:", error)
+    return {
+      success: false,
+      error:
+        error instanceof Error ? error.message : "Failed to get current token",
     }
   }
 }

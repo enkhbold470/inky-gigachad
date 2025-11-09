@@ -9,7 +9,7 @@ import {
   McpError,
 } from "@modelcontextprotocol/sdk/types.js"
 
-const API_BASE_URL = process.env.INKY_API_URL || "https://api.inky.dev"
+const API_BASE_URL = process.env.INKY_API_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
 const API_KEY = process.env.API_KEY
 
 if (!API_KEY) {
@@ -28,6 +28,10 @@ interface JsonRpcResponse {
   id?: string | number | null
 }
 
+/**
+ * Call backend API matching Postman collection format
+ * Format: { jsonrpc: "2.0", method: "...", params: {...}, id: ... }
+ */
 async function callBackendAPI(method: string, params: Record<string, unknown>): Promise<unknown> {
   const response = await fetch(`${API_BASE_URL}/api/mcp`, {
     method: "POST",
@@ -77,7 +81,7 @@ async function main() {
   const server = new Server(
     {
       name: "inky-mcp",
-      version: "1.0.0",
+      version: "1.0.1",
     },
     {
       capabilities: {
@@ -89,6 +93,7 @@ async function main() {
   const transport = new StdioServerTransport()
   await server.connect(transport)
 
+  // Handle tools/list - matches Postman collection format
   server.setRequestHandler(ListToolsRequestSchema, async () => {
     try {
       const result = await callBackendAPI("tools/list", {})
@@ -101,15 +106,31 @@ async function main() {
     }
   })
 
+  // Handle tools/call - matches Postman collection format
+  // Only supports list_rules tool
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     try {
       const { name, arguments: args } = request.params
+      
+      // Only allow list_rules tool
+      if (name !== "list_rules") {
+        throw new McpError(
+          ErrorCode.MethodNotFound,
+          `Tool '${name}' is not supported. Only 'list_rules' is available.`
+        )
+      }
+
+      // Call backend API with format matching Postman collection
       const result = await callBackendAPI("tools/call", {
-        name,
-        arguments: args,
+        name: "list_rules",
+        arguments: args || {},
       })
+      
       return result as { content: Array<{ type: string; text: string }> }
     } catch (error) {
+      if (error instanceof McpError) {
+        throw error
+      }
       throw new McpError(
         ErrorCode.InternalError,
         `Failed to call tool: ${error instanceof Error ? error.message : "Unknown error"}`
