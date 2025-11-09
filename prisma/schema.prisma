@@ -16,9 +16,6 @@ model User {
   clerk_id            String       @unique
   github_username     String?
   pinecone_index_name String?      @unique
-  mcp_access_token   String?      @unique // Hashed token for verification
-  mcp_token_encrypted String?      @db.Text // Encrypted token for retrieval
-  mcp_token_created_at DateTime?
   created_at          DateTime     @default(now())
   updated_at          DateTime     @updatedAt
 

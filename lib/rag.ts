@@ -63,6 +63,7 @@ export async function indexMarkdownFilesToPinecone(
   userId: string,
   repositoryIds: string[]
 ): Promise<{ indexed: number; failed: number }> {
+  console.log(`[indexMarkdownFilesToPinecone] Starting indexing for ${files.length} files`)
   const index = getPineconeIndex()
   const namespace = getUserPineconeNamespace(userId)
   let indexed = 0
@@ -87,6 +88,8 @@ export async function indexMarkdownFilesToPinecone(
         failed++
         continue
       }
+
+      console.log(`[indexMarkdownFilesToPinecone] Processing file ${file.path} (${chunks.length} chunks)`)
 
       // Index each chunk
       for (let i = 0; i < chunks.length; i++) {
@@ -124,6 +127,7 @@ export async function indexMarkdownFilesToPinecone(
     }
   }
 
+  console.log(`[indexMarkdownFilesToPinecone] Indexing complete: ${indexed} indexed, ${failed} failed`)
   return { indexed, failed }
 }
 
@@ -136,12 +140,16 @@ export async function generateRulesWithRAG(
   repositoryIds: string[],
   topK: number = 10
 ): Promise<string> {
+  console.log(`[generateRulesWithRAG] Starting RAG generation for user ${userId}`)
+  console.log(`[generateRulesWithRAG] Query: ${query.substring(0, 100)}...`)
+  
   const { generateEmbedding } = await import("@/lib/embeddings")
   const index = getPineconeIndex()
   const namespace = getUserPineconeNamespace(userId)
   const OpenAI = (await import("openai")).default
 
   // Generate embedding for the query
+  console.log(`[generateRulesWithRAG] Generating query embedding...`)
   const queryEmbedding = await generateEmbedding(query)
 
   // Search for relevant markdown chunks
@@ -158,6 +166,7 @@ export async function generateRulesWithRAG(
     // Or we can use $in if Pinecone supports it
   }
 
+  console.log(`[generateRulesWithRAG] Searching Pinecone with topK=${topK * 2}...`)
   const searchResults = await index.namespace(namespace).query({
     vector: queryEmbedding,
     topK: topK * 2, // Get more results to filter
@@ -175,6 +184,8 @@ export async function generateRulesWithRAG(
       })
     : searchResults.matches
 
+  console.log(`[generateRulesWithRAG] Found ${searchResults.matches.length} matches, ${filteredResults.length} after filtering`)
+
   // Extract relevant context from search results
   const contextChunks = filteredResults
     .slice(0, topK) // Take top K after filtering
@@ -182,8 +193,10 @@ export async function generateRulesWithRAG(
     .filter((content): content is string => typeof content === "string")
 
   const context = contextChunks.join("\n\n---\n\n")
+  console.log(`[generateRulesWithRAG] Extracted ${contextChunks.length} context chunks (${context.length} chars)`)
 
   // Generate rules using OpenAI with RAG context
+  console.log(`[generateRulesWithRAG] Calling OpenAI API...`)
   const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
   })
@@ -229,6 +242,8 @@ Return ONLY the rule content, no explanations or meta-commentary.`,
     max_tokens: 2000,
   })
 
-  return completion.choices[0]?.message?.content?.trim() || ""
+  const ruleContent = completion.choices[0]?.message?.content?.trim() || ""
+  console.log(`[generateRulesWithRAG] ✅ Generated rule content (${ruleContent.length} chars)`)
+  return ruleContent
 }
 
