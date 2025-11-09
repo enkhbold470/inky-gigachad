@@ -7,12 +7,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
+import { Progress } from "@/components/ui/progress"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Header } from "@/components/header"
 import { getRepositories } from "@/app/actions/random"
 import { saveRepositories } from "@/app/actions/repo_actions"
 import { createRule } from "@/app/actions/rule_actions"
 import { getPublicTemplates } from "@/app/actions/template_actions"
-import { Github, ThumbsUp, Copy, CheckCircle2, ArrowRight, Loader2 } from "lucide-react"
+import { Github, ThumbsUp, Copy, CheckCircle2, ArrowRight, Loader2, Terminal, FileText } from "lucide-react"
 import type { GitHubRepo } from "@/lib/github"
 import type { RuleTemplate } from "@/lib/types"
 import { toast } from "sonner"
@@ -32,6 +34,12 @@ export default function Dashboard() {
   const [showSuccess, setShowSuccess] = useState(false)
   const [generatedRule, setGeneratedRule] = useState<string>("")
   const [generatingRules, setGeneratingRules] = useState(false)
+  const [showProgressDialog, setShowProgressDialog] = useState(false)
+  const [progressStep, setProgressStep] = useState(0)
+  const [progressMessage, setProgressMessage] = useState("")
+  const [markdownFilesCount, setMarkdownFilesCount] = useState(0)
+  const [commands, setCommands] = useState<string[]>([])
+  const [currentCommand, setCurrentCommand] = useState("")
 
   const loadData = useCallback(async () => {
     if (!isLoaded || !user) return
@@ -85,19 +93,70 @@ export default function Dashboard() {
 
   const handleSaveRepositoriesAndGenerateRules = async () => {
     setGeneratingRules(true)
+    setShowProgressDialog(true)
+    setProgressStep(0)
+    setCommands([])
+    setCurrentCommand("")
+    
     try {
+      // Step 1: Scanning for markdown files
+      setProgressStep(1)
+      setProgressMessage("Scanning for markdown files...")
+      await new Promise(resolve => setTimeout(resolve, 500))
+      
       const reposToSave = githubRepos.filter((repo) => selectedRepos.has(repo.id))
+      
+      // Step 2: Saving repositories
+      setProgressStep(2)
+      setProgressMessage(`Saving ${reposToSave.length} repository/repositories...`)
+      await new Promise(resolve => setTimeout(resolve, 300))
+      
+      // Step 3: Loading markdown files
+      setProgressStep(3)
+      setProgressMessage("Loading markdown files...")
+      await new Promise(resolve => setTimeout(resolve, 500))
+      
       const result = await saveRepositories(reposToSave)
       
-      if (result.success && result.data?.generatedRule) {
-        setGeneratedRule(result.data.generatedRule.content)
-        toast.success("Repositories saved and rules generated!")
-        setActiveTab("rules")
+      if (result.success && result.data) {
+        // Update progress with markdown file info
+        if (result.data.totalMarkdownFiles !== undefined) {
+          setMarkdownFilesCount(result.data.totalMarkdownFiles)
+          setProgressMessage(`Found ${result.data.totalMarkdownFiles} markdown file(s)`)
+        }
+        
+        if (result.data.commands) {
+          setCommands(result.data.commands)
+          // Show commands one by one
+          for (let i = 0; i < result.data.commands.length; i++) {
+            setCurrentCommand(result.data.commands[i])
+            await new Promise(resolve => setTimeout(resolve, 200))
+          }
+        }
+        
+        // Step 4: Generating rules with AI
+        setProgressStep(4)
+        setProgressMessage("Generating rules with AI...")
+        await new Promise(resolve => setTimeout(resolve, 1000))
+        
+        if (result.data.generatedRule) {
+          setGeneratedRule(result.data.generatedRule.content)
+          setProgressStep(5)
+          setProgressMessage("Rules generated successfully!")
+          await new Promise(resolve => setTimeout(resolve, 500))
+          
+          setShowProgressDialog(false)
+          toast.success("Repositories saved and rules generated!")
+          setActiveTab("rules")
+        } else {
+          throw new Error("No rule generated")
+        }
       } else {
-        toast.error(result.error || "Failed to save repositories")
+        throw new Error(result.error || "Failed to save repositories")
       }
     } catch (error) {
       console.error("Error saving repositories:", error)
+      setShowProgressDialog(false)
       toast.error("Failed to save repositories")
     } finally {
       setGeneratingRules(false)
@@ -479,6 +538,108 @@ export default function Dashboard() {
           </Tabs>
         </div>
       </div>
+
+      {/* Progress Dialog */}
+      <Dialog open={showProgressDialog} onOpenChange={setShowProgressDialog}>
+        <DialogContent className="max-w-2xl" showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>Generating Rules</DialogTitle>
+            <DialogDescription>
+              Analyzing your repositories and markdown files to create personalized coding rules
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-6 mt-4">
+            {/* Progress Steps */}
+            <div className="space-y-4">
+              {[
+                { step: 1, label: "Scanning for markdown files", icon: FileText },
+                { step: 2, label: "Saving repositories", icon: Github },
+                { step: 3, label: "Loading markdown files", icon: FileText },
+                { step: 4, label: "Generating rules with AI", icon: Loader2 },
+                { step: 5, label: "Complete", icon: CheckCircle2 },
+              ].map(({ step, label, icon: Icon }) => {
+                const isActive = progressStep === step
+                const isCompleted = progressStep > step
+                
+                return (
+                  <div key={step} className="flex items-start gap-3">
+                    <div className={`mt-0.5 shrink-0 ${
+                      isCompleted ? "text-green-600" : 
+                      isActive ? "text-primary" : 
+                      "text-muted-foreground"
+                    }`}>
+                      {isCompleted ? (
+                        <CheckCircle2 className="size-5" />
+                      ) : isActive ? (
+                        <Loader2 className="size-5 animate-spin" />
+                      ) : (
+                        <Icon className="size-5" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className={`font-medium ${
+                        isActive ? "text-primary" : 
+                        isCompleted ? "text-green-600" : 
+                        "text-muted-foreground"
+                      }`}>
+                        {label}
+                      </div>
+                      {isActive && progressMessage && (
+                        <div className="text-sm text-muted-foreground mt-1">
+                          {progressMessage}
+                        </div>
+                      )}
+                      {step === 3 && markdownFilesCount > 0 && (
+                        <div className="text-sm text-muted-foreground mt-1">
+                          Found {markdownFilesCount} markdown file{markdownFilesCount !== 1 ? "s" : ""}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Progress Bar */}
+            <div className="space-y-2">
+              <Progress value={(progressStep / 5) * 100} className="h-2" />
+              <div className="text-xs text-muted-foreground text-center">
+                Step {progressStep} of 5
+              </div>
+            </div>
+
+            {/* Commands Display */}
+            {commands.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <Terminal className="size-4" />
+                  <span>Linux Commands</span>
+                </div>
+                <div className="bg-muted rounded-lg p-4 max-h-48 overflow-y-auto">
+                  <div className="space-y-2 font-mono text-xs">
+                    {commands.map((cmd, idx) => (
+                      <div 
+                        key={idx} 
+                        className={`p-2 rounded ${
+                          currentCommand === cmd 
+                            ? "bg-primary/10 border border-primary/20" 
+                            : "bg-background/50"
+                        }`}
+                      >
+                        <span className="text-muted-foreground">$</span>{" "}
+                        <span className={currentCommand === cmd ? "text-primary font-semibold" : ""}>
+                          {cmd}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

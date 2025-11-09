@@ -5,6 +5,12 @@ import { prisma } from "@/lib/prisma"
 import { saveRepositorySchema, type SaveRepositoryInput } from "@/lib/validations"
 import type { GitHubRepo } from "@/lib/github"
 import { z } from "zod"
+import OpenAI from "openai"
+import { getAllMarkdownContext, getAllMarkdownContextWithInfo } from "@/lib/markdown-context"
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+})
 
 /**
  * Get or create user in database
@@ -196,13 +202,104 @@ export async function saveRepositories(repos: GitHubRepo[]) {
       data: { is_active: false },
     })
 
-    // Generate rule based on repositories
+    // Generate rule based on repositories with context from markdown files
+    console.log("[saveRepositories] Loading markdown context...")
+    const markdownContextResult = getAllMarkdownContextWithInfo()
+    const markdownContext = markdownContextResult.content
+    console.log("[saveRepositories] ✓ Loaded markdown context")
+    console.log("[saveRepositories] Found", markdownContextResult.totalFiles, "markdown files")
+
     const languages = savedRepos
       .map((r) => r.language)
       .filter((l): l is string => l !== null && l !== undefined)
     const uniqueLanguages = [...new Set(languages)]
-    
-    const ruleContent = `Based on your selected repositories, here are your coding preferences:
+
+    const repoInfo = savedRepos.map((r) => ({
+      name: r.name,
+      full_name: r.full_name,
+      language: r.language,
+      description: r.description,
+    }))
+
+    console.log("[saveRepositories] Generating rule with AI...")
+    try {
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "system",
+            content: `You are an expert at analyzing code repositories and generating comprehensive coding rules and guidelines. Your task is to create detailed, actionable coding rules based on:
+1. The user's selected repositories
+2. Context from existing markdown documentation files
+
+Generate rules that are:
+- Specific and actionable
+- Based on patterns found in the repositories
+- Aligned with best practices from the markdown context
+- Well-structured and easy to follow
+- Focused on code style, architecture, and best practices`,
+          },
+          {
+            role: "user",
+            content: `Based on the following information, generate comprehensive coding rules:
+
+## Selected Repositories:
+${JSON.stringify(repoInfo, null, 2)}
+
+## Primary Languages Detected:
+${uniqueLanguages.join(", ")}
+
+## Context from Markdown Files:
+${markdownContext}
+
+Please generate detailed coding rules that:
+1. Reflect the coding patterns and preferences from the selected repositories
+2. Incorporate best practices from the markdown documentation context
+3. Are specific to the languages used (${uniqueLanguages.join(", ")})
+4. Include guidelines for code style, architecture, testing, and best practices
+5. Are formatted clearly and are easy to follow
+
+Return ONLY the rule content, no explanations or meta-commentary.`,
+          },
+        ],
+        temperature: 0.7,
+        max_tokens: 2000,
+      })
+
+      const ruleContent = completion.choices[0]?.message?.content?.trim()
+
+      if (!ruleContent) {
+        throw new Error("No response from AI")
+      }
+
+      console.log("[saveRepositories] ✅ Rule generated successfully")
+
+      // Create generated rule
+      const generatedRule = await prisma.rule.create({
+        data: {
+          user_id: user.id,
+          name: "Generated Rules from Repositories",
+          content: ruleContent,
+          version: 1,
+        },
+      })
+
+      console.log("[saveRepositories] ✅ Repositories and rule saved successfully")
+      return { 
+        success: true, 
+        data: { 
+          repositories: savedRepos, 
+          generatedRule,
+          markdownFiles: markdownContextResult.files,
+          totalMarkdownFiles: markdownContextResult.totalFiles,
+          commands: markdownContextResult.commands,
+        } 
+      }
+    } catch (aiError) {
+      console.error("[saveRepositories] ✗ AI generation failed, falling back to simple rule:", aiError)
+      
+      // Fallback to simple rule generation
+      const ruleContent = `Based on your selected repositories, here are your coding preferences:
 
 Primary Languages: ${uniqueLanguages.join(", ")}
 
@@ -216,18 +313,27 @@ Guidelines:
 
 This rule was automatically generated based on your repository selection.`
 
-    // Create generated rule
-    const generatedRule = await prisma.rule.create({
-      data: {
-        user_id: user.id,
-        name: "Generated Rules from Repositories",
-        content: ruleContent,
-        version: 1,
-      },
-    })
+      const generatedRule = await prisma.rule.create({
+        data: {
+          user_id: user.id,
+          name: "Generated Rules from Repositories",
+          content: ruleContent,
+          version: 1,
+        },
+      })
 
-    console.log("[saveRepositories] ✅ Repositories and rule saved successfully")
-    return { success: true, data: { repositories: savedRepos, generatedRule } }
+      console.log("[saveRepositories] ✅ Repositories and rule saved successfully (fallback)")
+      return { 
+        success: true, 
+        data: { 
+          repositories: savedRepos, 
+          generatedRule,
+          markdownFiles: markdownContextResult.files,
+          totalMarkdownFiles: markdownContextResult.totalFiles,
+          commands: markdownContextResult.commands,
+        } 
+      }
+    }
   } catch (error) {
     console.error("[saveRepositories] ✗ Error occurred:", error)
     return { success: false, error: error instanceof Error ? error.message : "Failed to save repositories" }
