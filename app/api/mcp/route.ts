@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { hashToken } from "@/lib/mcp-token"
-import { getPineconeIndex, getUserPineconeNamespace } from "@/lib/pinecone"
-import { generateEmbedding } from "@/lib/embeddings"
 
 /**
  * Authenticate user from MCP token
@@ -21,6 +19,113 @@ async function authenticateUser(token: string) {
   })
 
   return user
+}
+
+/**
+ * Handle SSE connection for MCP protocol
+ * MCP over HTTP uses SSE for server-to-client messages
+ */
+export async function GET(req: Request) {
+  try {
+    // Extract token from Authorization header or query parameter
+    const authHeader = req.headers.get("Authorization")
+    const tokenFromHeader = authHeader?.startsWith("Bearer ")
+      ? authHeader.substring(7)
+      : null
+    const tokenFromQuery = new URL(req.url).searchParams.get("token")
+    const token = tokenFromHeader || tokenFromQuery
+
+    if (!token) {
+      return NextResponse.json(
+        {
+          jsonrpc: "2.0",
+          error: {
+            code: -32001,
+            message: "Unauthorized",
+            data: "Missing access token",
+          },
+        },
+        { status: 401 }
+      )
+    }
+
+    const user = await authenticateUser(token)
+    if (!user) {
+      return NextResponse.json(
+        {
+          jsonrpc: "2.0",
+          error: {
+            code: -32001,
+            message: "Unauthorized",
+            data: "Invalid access token",
+          },
+        },
+        { status: 401 }
+      )
+    }
+
+    // Return SSE stream
+    const stream = new ReadableStream({
+      start(controller) {
+        const encoder = new TextEncoder()
+
+        // Send initial connection message
+        const sendMessage = (data: unknown) => {
+          const message = `data: ${JSON.stringify(data)}\n\n`
+          controller.enqueue(encoder.encode(message))
+        }
+
+        // Send server info
+        sendMessage({
+          jsonrpc: "2.0",
+          method: "notifications/initialized",
+          params: {},
+        })
+
+        // Keep connection alive with periodic ping
+        const pingInterval = setInterval(() => {
+          try {
+            sendMessage({
+              jsonrpc: "2.0",
+              method: "ping",
+              params: { timestamp: Date.now() },
+            })
+          } catch {
+            clearInterval(pingInterval)
+            controller.close()
+          }
+        }, 30000) // Ping every 30 seconds
+
+        // Handle cleanup
+        req.signal.addEventListener("abort", () => {
+          clearInterval(pingInterval)
+          controller.close()
+        })
+      },
+    })
+
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+        "X-Accel-Buffering": "no",
+      },
+    })
+  } catch (error) {
+    console.error("[MCP] SSE error:", error)
+    return NextResponse.json(
+      {
+        jsonrpc: "2.0",
+        error: {
+          code: -32603,
+          message: "Internal error",
+          data: "Failed to establish SSE connection",
+        },
+      },
+      { status: 500 }
+    )
+  }
 }
 
 /**
@@ -88,43 +193,6 @@ export async function POST(req: Request) {
         result: {
           tools: [
             {
-              name: "search_rules",
-              description: "Search user's coding rules using semantic similarity",
-              inputSchema: {
-                type: "object",
-                properties: {
-                  query: {
-                    type: "string",
-                    description: "Search query to find relevant rules",
-                  },
-                  repository_id: {
-                    type: "string",
-                    description: "Optional repository ID to filter rules",
-                  },
-                  top_k: {
-                    type: "number",
-                    description: "Number of results to return (default: 5)",
-                    default: 5,
-                  },
-                },
-                required: ["query"],
-              },
-            },
-            {
-              name: "get_rule",
-              description: "Get a specific rule by ID",
-              inputSchema: {
-                type: "object",
-                properties: {
-                  rule_id: {
-                    type: "string",
-                    description: "The ID of the rule to retrieve",
-                  },
-                },
-                required: ["rule_id"],
-              },
-            },
-            {
               name: "list_rules",
               description: "List all user's rules, optionally filtered by repository",
               inputSchema: {
@@ -161,185 +229,7 @@ export async function POST(req: Request) {
         )
       }
 
-      // Handle different tools
-      if (name === "search_rules") {
-        const { query, repository_id, top_k = 5 } = toolArgs || {}
-
-        if (!query || typeof query !== "string") {
-          return NextResponse.json(
-            {
-              jsonrpc: "2.0",
-              error: {
-                code: -32602,
-                message: "Invalid params",
-                data: "Missing or invalid query parameter",
-              },
-              id,
-            },
-            { status: 400 }
-          )
-        }
-
-        try {
-          // Generate embedding for query
-          const queryEmbedding = await generateEmbedding(query)
-
-          // Search in user's Pinecone namespace
-          const index = getPineconeIndex()
-          const namespace = getUserPineconeNamespace(user.id)
-          const searchResults = await index.namespace(namespace).query({
-            vector: queryEmbedding,
-            topK: top_k,
-            includeMetadata: true,
-            filter: {
-              user_id: user.id,
-              ...(repository_id ? { repository_id: repository_id } : {}),
-              type: "rule",
-            },
-          })
-
-          // Fetch full rule data from database
-          const ruleIds = searchResults.matches
-            .map((match) => match.metadata?.rule_id)
-            .filter((id): id is string => typeof id === "string")
-
-          const rules = await prisma.rule.findMany({
-            where: {
-              id: { in: ruleIds },
-              user_id: user.id,
-            },
-            select: {
-              id: true,
-              name: true,
-              content: true,
-              version: true,
-              is_active: true,
-              repository_id: true,
-              created_at: true,
-            },
-          })
-
-          const rulesWithScores = rules.map((rule) => {
-            const match = searchResults.matches.find(
-              (m) => m.metadata?.rule_id === rule.id
-            )
-            return {
-              ...rule,
-              relevance_score: match?.score ?? 0,
-            }
-          })
-
-          rulesWithScores.sort((a, b) => b.relevance_score - a.relevance_score)
-
-          return NextResponse.json({
-            jsonrpc: "2.0",
-            result: {
-              content: [
-                {
-                  type: "text",
-                  text: JSON.stringify(rulesWithScores, null, 2),
-                },
-              ],
-            },
-            id,
-          })
-        } catch (error) {
-          console.error("[MCP] Error searching rules:", error)
-          return NextResponse.json(
-            {
-              jsonrpc: "2.0",
-              error: {
-                code: -32603,
-                message: "Internal error",
-                data: "Failed to search rules",
-              },
-              id,
-            },
-            { status: 500 }
-          )
-        }
-      }
-
-      if (name === "get_rule") {
-        const { rule_id } = toolArgs || {}
-
-        if (!rule_id || typeof rule_id !== "string") {
-          return NextResponse.json(
-            {
-              jsonrpc: "2.0",
-              error: {
-                code: -32602,
-                message: "Invalid params",
-                data: "Missing or invalid rule_id parameter",
-              },
-              id,
-            },
-            { status: 400 }
-          )
-        }
-
-        try {
-          const rule = await prisma.rule.findFirst({
-            where: {
-              id: rule_id,
-              user_id: user.id,
-            },
-            select: {
-              id: true,
-              name: true,
-              content: true,
-              version: true,
-              is_active: true,
-              repository_id: true,
-              created_at: true,
-              updated_at: true,
-            },
-          })
-
-          if (!rule) {
-            return NextResponse.json(
-              {
-                jsonrpc: "2.0",
-                error: {
-                  code: -32602,
-                  message: "Invalid params",
-                  data: "Rule not found",
-                },
-                id,
-              },
-              { status: 404 }
-            )
-          }
-
-          return NextResponse.json({
-            jsonrpc: "2.0",
-            result: {
-              content: [
-                {
-                  type: "text",
-                  text: JSON.stringify(rule, null, 2),
-                },
-              ],
-            },
-            id,
-          })
-        } catch (error) {
-          console.error("[MCP] Error getting rule:", error)
-          return NextResponse.json(
-            {
-              jsonrpc: "2.0",
-              error: {
-                code: -32603,
-                message: "Internal error",
-                data: "Failed to get rule",
-              },
-              id,
-            },
-            { status: 500 }
-          )
-        }
-      }
-
+      // Handle list_rules tool
       if (name === "list_rules") {
         const { repository_id } = toolArgs || {}
 
