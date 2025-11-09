@@ -42,3 +42,5 @@ next-env.d.ts
 
 # prisma
 lib/prisma
+
+prompt-list-for-emergent.md
