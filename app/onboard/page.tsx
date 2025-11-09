@@ -42,7 +42,9 @@ export default function Dashboard() {
   const [commands, setCommands] = useState<string[]>([])
   const [currentCommand, setCurrentCommand] = useState("")
   const [mcpConfig, setMcpConfig] = useState<string>("")
+  const [mcpConfigStdio, setMcpConfigStdio] = useState<string>("")
   const [loadingMcpConfig, setLoadingMcpConfig] = useState(false)
+  const [mcpConfigMethod, setMcpConfigMethod] = useState<"http" | "stdio">("http")
 
   const loadData = useCallback(async () => {
     if (!isLoaded || !user) return
@@ -190,8 +192,9 @@ export default function Dashboard() {
   }
 
   const handleCopyMCPCode = () => {
-    if (mcpConfig) {
-      navigator.clipboard.writeText(mcpConfig)
+    const configToCopy = mcpConfigMethod === "http" ? mcpConfig : mcpConfigStdio
+    if (configToCopy) {
+      navigator.clipboard.writeText(configToCopy)
       toast.success("MCP server code copied to clipboard!")
     } else {
       toast.error("MCP configuration not loaded. Please try again.")
@@ -205,8 +208,26 @@ export default function Dashboard() {
     try {
       const result = await getMCPConfig()
       if (result.success && result.data) {
+        // HTTP Transport config (Option 1)
         const configJson = JSON.stringify(result.data.config, null, 2)
         setMcpConfig(configJson)
+        
+        // Stdio Transport config (Option 2)
+        const baseUrl = result.data.apiUrl.replace("/api/mcp", "")
+        const stdioConfig = {
+          mcpServers: {
+            inky: {
+              command: "npx",
+              args: ["-y", "inky-mcp-server"],
+              env: {
+                API_KEY: result.data.token,
+                INKY_API_URL: baseUrl,
+              },
+            },
+          },
+        }
+        const stdioConfigJson = JSON.stringify(stdioConfig, null, 2)
+        setMcpConfigStdio(stdioConfigJson)
       } else {
         toast.error(result.error || "Failed to load MCP configuration")
       }
@@ -221,11 +242,11 @@ export default function Dashboard() {
   // Load MCP config when tools tab is selected or tool is selected
   useEffect(() => {
     if (activeTab === "tools" || selectedTool) {
-      if (!mcpConfig && !loadingMcpConfig) {
+      if (!mcpConfig && !mcpConfigStdio && !loadingMcpConfig) {
         loadMCPConfig()
       }
     }
-  }, [activeTab, selectedTool, mcpConfig, loadingMcpConfig, loadMCPConfig])
+  }, [activeTab, selectedTool, mcpConfig, mcpConfigStdio, loadingMcpConfig, loadMCPConfig])
 
   const handleFinish = async () => {
     if (!selectedTool) {
@@ -534,7 +555,7 @@ export default function Dashboard() {
                             <Button 
                               size="sm" 
                               onClick={handleCopyMCPCode}
-                              disabled={!mcpConfig || loadingMcpConfig}
+                              disabled={(!mcpConfig && !mcpConfigStdio) || loadingMcpConfig}
                             >
                               <Copy className="size-4 mr-2" />
                               Copy
@@ -547,14 +568,37 @@ export default function Dashboard() {
                               <Loader2 className="size-6 animate-spin text-muted-foreground" />
                               <span className="ml-2 text-sm text-muted-foreground">Loading configuration...</span>
                             </div>
-                          ) : mcpConfig ? (
+                          ) : (mcpConfig || mcpConfigStdio) ? (
                             <>
-                              <pre className="text-xs bg-muted p-4 rounded-lg overflow-x-auto">
-                                {mcpConfig}
-                              </pre>
-                              <p className="text-xs text-muted-foreground mt-2">
-                                Paste this into your {selectedTool} MCP configuration file
-                              </p>
+                              {/* Configuration Method Selector */}
+                              <div className="mb-4">
+                                <Tabs value={mcpConfigMethod} onValueChange={(v) => setMcpConfigMethod(v as "http" | "stdio")}>
+                                  <TabsList className="grid w-full grid-cols-2">
+                                    <TabsTrigger value="http">Option 1: HTTP Transport</TabsTrigger>
+                                    <TabsTrigger value="stdio">Option 2: Stdio Transport</TabsTrigger>
+                                  </TabsList>
+                                  <TabsContent value="http" className="mt-4">
+                                    <div className="space-y-2">
+                                      <pre className="text-xs bg-muted p-4 rounded-lg overflow-x-auto">
+                                        {mcpConfig}
+                                      </pre>
+                                      <p className="text-xs text-muted-foreground">
+                                        Direct API access - Paste this into your {selectedTool} MCP configuration file
+                                      </p>
+                                    </div>
+                                  </TabsContent>
+                                  <TabsContent value="stdio" className="mt-4">
+                                    <div className="space-y-2">
+                                      <pre className="text-xs bg-muted p-4 rounded-lg overflow-x-auto">
+                                        {mcpConfigStdio}
+                                      </pre>
+                                      <p className="text-xs text-muted-foreground">
+                                        Using npm package - Paste this into your {selectedTool} MCP configuration file. Requires <code className="bg-muted px-1 rounded">inky-mcp-server</code> npm package.
+                                      </p>
+                                    </div>
+                                  </TabsContent>
+                                </Tabs>
+                              </div>
                             </>
                           ) : (
                             <div className="text-sm text-muted-foreground p-4">

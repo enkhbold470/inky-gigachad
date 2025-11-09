@@ -1,6 +1,11 @@
 # Inky MCP Server
 
+[![npm version](https://img.shields.io/npm/v/inky-mcp-server)](https://www.npmjs.com/package/inky-mcp-server)
+[![npm downloads](https://img.shields.io/npm/dm/inky-mcp-server)](https://www.npmjs.com/package/inky-mcp-server)
+
 MCP (Model Context Protocol) server for Inky that provides access to your personalized coding rules stored in Pinecone. This server acts as a bridge between Cursor IDE and your Inky backend API.
+
+📦 **Published on npmjs:** [https://www.npmjs.com/package/inky-mcp-server](https://www.npmjs.com/package/inky-mcp-server)
 
 ## Overview
 
@@ -16,22 +21,30 @@ The Inky MCP server allows you to access your personalized software rules direct
 
 ## Installation
 
+The package is available on npmjs: [inky-mcp-server](https://www.npmjs.com/package/inky-mcp-server)
+
 ### Using npx (Recommended)
 
 ```bash
-npx -y @enkhbold470/inky-mcp-server
+npx -y inky-mcp-server
 ```
 
 ### Using npm
 
 ```bash
-npm install -g @enkhbold470/inky-mcp-server
+npm install -g inky-mcp-server
 ```
 
 ### Using pnpm
 
 ```bash
-pnpm add -g @enkhbold470/inky-mcp-server
+pnpm add -g inky-mcp-server
+```
+
+### Using yarn
+
+```bash
+yarn global add inky-mcp-server
 ```
 
 ## Configuration
@@ -47,12 +60,29 @@ Add the following configuration to your Cursor settings. The configuration file 
 **macOS/Linux:** `~/.cursor/mcp.json`  
 **Windows:** `%APPDATA%\Cursor\mcp.json`
 
+**Option 1: HTTP Transport (Recommended - Direct API Access)**
+
+```json
+{
+  "mcpServers": {
+    "inky": {
+      "url": "https://your-domain.com/api/mcp",
+      "headers": {
+        "Authorization": "Bearer inky_YOUR_TOKEN_HERE"
+      }
+    }
+  }
+}
+```
+
+**Option 2: Stdio Transport (Using MCP Server Package)**
+
 ```json
 {
   "mcpServers": {
     "inky": {
       "command": "npx",
-      "args": ["-y", "@enkhbold470/inky-mcp-server"],
+      "args": ["-y", "inky-mcp-server"],
       "env": {
         "API_KEY": "inky_YOUR_TOKEN_HERE",
         "INKY_API_URL": "https://your-domain.com"
