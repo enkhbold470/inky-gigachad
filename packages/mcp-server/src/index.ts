@@ -81,7 +81,7 @@ async function main() {
   const server = new Server(
     {
       name: "inky-mcp",
-      version: "1.0.1",
+      version: "1.0.3",
     },
     {
       capabilities: {

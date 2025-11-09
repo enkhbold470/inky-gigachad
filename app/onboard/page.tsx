@@ -213,7 +213,9 @@ export default function Dashboard() {
         setMcpConfig(configJson)
         
         // Stdio Transport config (Option 2)
-        const baseUrl = result.data.apiUrl.replace("/api/mcp", "")
+        // Extract base URL from apiUrl (remove /api/mcp suffix)
+        const apiUrl = result.data.apiUrl || ""
+        const baseUrl = apiUrl.replace(/\/api\/mcp\/?$/, "") || "http://localhost:3000"
         const stdioConfig = {
           mcpServers: {
             inky: {
