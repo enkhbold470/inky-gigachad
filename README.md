@@ -241,11 +241,27 @@ Inky provides an MCP (Model Context Protocol) server for integration with AI cod
 ```json
 {
   "mcpServers": {
-    "inky-rules": {
-      "type": "http",
-      "url": "https://api.inky.dev/mcp",
+    "inky": {
+      "url": "https://api.inky.dev/api/mcp",
       "headers": {
-        "Authorization": "Bearer YOUR_API_KEY"
+        "X-User-Id": "user_xxxxx"
+      }
+    }
+  }
+}
+```
+
+Or for stdio transport:
+
+```json
+{
+  "mcpServers": {
+    "inky": {
+      "command": "npx",
+      "args": ["-y", "inky-mcp-server"],
+      "env": {
+        "USER_ID": "user_xxxxx",
+        "INKY_API_URL": "https://api.inky.dev"
       }
     }
   }
