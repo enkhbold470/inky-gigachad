@@ -1,10 +1,11 @@
 {
   "name": "inky-mcp-server",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "MCP server for Inky - Access your personalized coding rules",
   "main": "dist/index.js",
   "type": "module",
   "bin": {
+    "inky-mcp-server": "dist/index.js",
     "inky-mcp": "dist/index.js"
   },
   "scripts": {
