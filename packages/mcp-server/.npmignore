@@ -1,0 +1,15 @@
+# Inky MCP Server
+
+This package provides an MCP (Model Context Protocol) server for accessing your personalized Inky coding rules through MCP-compatible clients like Cursor, Windsurf, and Claude Desktop.
+
+## Features
+
+- Search your coding rules using semantic similarity
+- Retrieve specific rules by ID
+- List all your rules
+- Secure token-based authentication
+
+## Usage
+
+The server communicates with the Inky backend API using your personal access token. Get your token from the Inky dashboard and add it to your MCP configuration.
+

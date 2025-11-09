@@ -14,6 +14,7 @@ import { getRepositories } from "@/app/actions/random"
 import { saveRepositories } from "@/app/actions/repo_actions"
 import { createRule } from "@/app/actions/rule_actions"
 import { getPublicTemplates } from "@/app/actions/template_actions"
+import { getMCPConfig } from "@/app/actions/mcp_actions"
 import { Github, ThumbsUp, Copy, CheckCircle2, ArrowRight, Loader2, Terminal, FileText } from "lucide-react"
 import type { GitHubRepo } from "@/lib/github"
 import type { RuleTemplate } from "@/lib/types"
@@ -40,6 +41,8 @@ export default function Dashboard() {
   const [markdownFilesCount, setMarkdownFilesCount] = useState(0)
   const [commands, setCommands] = useState<string[]>([])
   const [currentCommand, setCurrentCommand] = useState("")
+  const [mcpConfig, setMcpConfig] = useState<string>("")
+  const [loadingMcpConfig, setLoadingMcpConfig] = useState(false)
 
   const loadData = useCallback(async () => {
     if (!isLoaded || !user) return
@@ -187,20 +190,42 @@ export default function Dashboard() {
   }
 
   const handleCopyMCPCode = () => {
-    const mcpCode = `{
-  "mcpServers": {
-    "inky-rules": {
-      "type": "http",
-      "url": "https://api.inky.dev/mcp",
-      "headers": {
-        "Authorization": "Bearer YOUR_API_KEY"
-      }
+    if (mcpConfig) {
+      navigator.clipboard.writeText(mcpConfig)
+      toast.success("MCP server code copied to clipboard!")
+    } else {
+      toast.error("MCP configuration not loaded. Please try again.")
     }
   }
-}`
-    navigator.clipboard.writeText(mcpCode)
-    toast.success("MCP server code copied to clipboard!")
-  }
+
+  const loadMCPConfig = useCallback(async () => {
+    if (!isLoaded || !user) return
+
+    setLoadingMcpConfig(true)
+    try {
+      const result = await getMCPConfig()
+      if (result.success && result.data) {
+        const configJson = JSON.stringify(result.data.config, null, 2)
+        setMcpConfig(configJson)
+      } else {
+        toast.error(result.error || "Failed to load MCP configuration")
+      }
+    } catch (error) {
+      console.error("Error loading MCP config:", error)
+      toast.error("Failed to load MCP configuration")
+    } finally {
+      setLoadingMcpConfig(false)
+    }
+  }, [isLoaded, user])
+
+  // Load MCP config when tools tab is selected or tool is selected
+  useEffect(() => {
+    if (activeTab === "tools" || selectedTool) {
+      if (!mcpConfig && !loadingMcpConfig) {
+        loadMCPConfig()
+      }
+    }
+  }, [activeTab, selectedTool, mcpConfig, loadingMcpConfig, loadMCPConfig])
 
   const handleFinish = async () => {
     if (!selectedTool) {
@@ -506,29 +531,36 @@ export default function Dashboard() {
                         <CardHeader>
                           <div className="flex items-center justify-between">
                             <CardTitle className="text-sm">MCP Server Configuration</CardTitle>
-                            <Button size="sm" onClick={handleCopyMCPCode}>
+                            <Button 
+                              size="sm" 
+                              onClick={handleCopyMCPCode}
+                              disabled={!mcpConfig || loadingMcpConfig}
+                            >
                               <Copy className="size-4 mr-2" />
                               Copy
                             </Button>
                           </div>
                         </CardHeader>
                         <CardContent>
-                          <pre className="text-xs bg-muted p-4 rounded-lg overflow-x-auto">
-{`{
-  "mcpServers": {
-    "inky-rules": {
-      "type": "http",
-      "url": "https://api.inky.dev/mcp",
-      "headers": {
-        "Authorization": "Bearer YOUR_API_KEY"
-      }
-    }
-  }
-}`}
-                          </pre>
-                          <p className="text-xs text-muted-foreground mt-2">
-                            Paste this into your {selectedTool} MCP configuration file
-                          </p>
+                          {loadingMcpConfig ? (
+                            <div className="flex items-center justify-center p-8">
+                              <Loader2 className="size-6 animate-spin text-muted-foreground" />
+                              <span className="ml-2 text-sm text-muted-foreground">Loading configuration...</span>
+                            </div>
+                          ) : mcpConfig ? (
+                            <>
+                              <pre className="text-xs bg-muted p-4 rounded-lg overflow-x-auto">
+                                {mcpConfig}
+                              </pre>
+                              <p className="text-xs text-muted-foreground mt-2">
+                                Paste this into your {selectedTool} MCP configuration file
+                              </p>
+                            </>
+                          ) : (
+                            <div className="text-sm text-muted-foreground p-4">
+                              Failed to load MCP configuration. Please refresh the page.
+                            </div>
+                          )}
                         </CardContent>
                       </Card>
                     )}

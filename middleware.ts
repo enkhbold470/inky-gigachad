@@ -5,6 +5,7 @@ const isPublicRoute = createRouteMatcher([
   "/",
   "/sign-in(.*)",
   "/sign-up(.*)",
+  "/api/mcp", // MCP endpoint uses token-based auth
 ])
 
 export default clerkMiddleware(async (auth, request) => {
