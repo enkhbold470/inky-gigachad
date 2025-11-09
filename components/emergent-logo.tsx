@@ -18,6 +18,7 @@ export function EmergentLogo() {
         width={80}
         height={32}
         className="emergent-logo-image"
+        style={{ width: "auto", height: "auto" }}
       />
     </Link>
   )

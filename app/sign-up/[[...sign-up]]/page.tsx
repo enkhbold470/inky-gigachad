@@ -12,6 +12,7 @@ export default function SignUpPage() {
             width={40}
             height={40}
             className="sign-up-logo"
+            style={{ width: "auto", height: "auto" }}
           />
           <span className="font-mono text-2xl font-semibold">Inky</span>
         </div>
