@@ -84,8 +84,6 @@ export async function getMCPConfig() {
       },
     })
 
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://api.inky.dev"
-
     return {
       success: true,
       data: {
@@ -93,10 +91,9 @@ export async function getMCPConfig() {
           mcpServers: {
             inky: {
               command: "npx",
-              args: ["-y", "inky-mcp-server"],
+              args: ["-y", "@enkhbold470/inky-mcp-server"],
               env: {
                 API_KEY: token,
-                INKY_API_URL: baseUrl,
               },
             },
           },
