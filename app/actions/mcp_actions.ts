@@ -85,11 +85,16 @@ export async function getMCPConfig() {
     })
 
     // Get the base URL for the API
-    const baseUrl =
-      process.env.NEXT_PUBLIC_APP_URL ||
-      (process.env.VERCEL_URL
-        ? `https://${process.env.VERCEL_URL}`
-        : "http://localhost:3000")
+    // Priority: NEXT_PUBLIC_APP_URL > VERCEL_URL > fallback
+    let baseUrl = process.env.NEXT_PUBLIC_APP_URL
+    if (!baseUrl && process.env.VERCEL_URL) {
+      baseUrl = `https://${process.env.VERCEL_URL}`
+    }
+    if (!baseUrl) {
+      baseUrl = "http://localhost:3000"
+    }
+    // Ensure no trailing slash
+    baseUrl = baseUrl.replace(/\/$/, "")
 
     return {
       success: true,
