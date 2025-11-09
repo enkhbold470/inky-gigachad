@@ -266,7 +266,7 @@ export default function Dashboard() {
   }, [isLoaded, user])
 
   useEffect(() => {
-    if (activeTab === "tools" || selectedTool) {
+    if (selectedTool && activeTab === "tools") {
       if (!mcpConfig && !mcpConfigStdio && !loadingMcpConfig) {
         loadMCPConfig()
       }
@@ -592,6 +592,12 @@ export default function Dashboard() {
                         </Button>
                       ))}
                     </div>
+
+                    {!selectedTool && (
+                      <div className="text-center text-muted-foreground py-8 text-sm">
+                        Please select a coding tool above to view MCP server configuration
+                      </div>
+                    )}
 
                     {selectedTool && (
                       <Card className="mt-4">
