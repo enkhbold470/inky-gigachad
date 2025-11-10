@@ -4,6 +4,7 @@ import Link from "next/link"
 import { useUser } from "@clerk/nextjs"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/components/ui/carousel"
 import { Github, ArrowRight } from "lucide-react"
 import { Header } from "@/components/header"
 
@@ -22,28 +23,10 @@ export default function Home() {
               <span className="font-mono text-base text-muted-foreground">| Memory Layer for Personalized Coding</span>
             </CardTitle>
             <CardDescription className="mt-4 max-w-xl text-lg">
-              Inky analyzes your GitHub repositories and markdown docs to generate AI-powered, deeply personalized coding rules.
-              Keep your code consistently <b>you</b>—everywhere you code.
+              AI-powered coding rules from your GitHub repos and docs. Keep your code consistently <b>you</b>.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <ul className="mb-4 space-y-2 text-base">
-              <li>
-                <b>• Repository Analysis:</b> Connect &amp; analyze your GitHub repos for coding styles and patterns.
-              </li>
-              <li>
-                <b>• Intelligent Rule Generation:</b> AI generates coding standards using repo and Markdown context.
-              </li>
-              <li>
-                <b>• Rule Management:</b> Organize, version, and search your rules in a snap.
-              </li>
-              <li>
-                <b>• Coding Sessions:</b> In-context rules for every coding session, tracked and analyzed.
-              </li>
-              <li>
-                <b>• MCP Server Integration:</b> Connect with tools like Windsurf, Cursor, Claude Code, and more.
-              </li>
-            </ul>
             <div className="flex flex-col sm:flex-row gap-4 mt-6">
               {isLoaded && !user && (
                 <Button size="lg" className="w-full sm:w-auto" asChild>
@@ -68,25 +51,36 @@ export default function Home() {
             <CardTitle className="text-2xl font-semibold">How It Works</CardTitle>
           </CardHeader>
           <CardContent>
-            <ol className="list-decimal ml-6 space-y-2 text-base">
-              <li>
-                <b>Connect GitHub:</b> Secure login &amp; repo selection.
-              </li>
-              <li>
-                <b>Analyze &amp; Process:</b> Inky scans your code and Markdown files for patterns.
-              </li>
-              <li>
-                <b>AI Rule Generation:</b> GPT-4 turns your patterns and docs into actionable rules.
-              </li>
-              <li>
-                <b>Integrate Everywhere:</b> Access your coding preferences across all your tools with MCP.
-              </li>
-            </ol>
-            <div className="mt-6 text-muted-foreground text-sm">
-              <p>
-                Open Source • TypeScript, Next.js, Clerk, Pinecone, OpenAI • <a href="https://github.com" className="hover:underline" target="_blank" rel="noopener">GitHub Repo</a>
-              </p>
-            </div>
+            <Carousel className="w-full mt-6">
+              <CarouselContent>
+                <CarouselItem>
+                  <div className="rounded-lg overflow-hidden border border-border">
+                    <img src="/demo1.gif" alt="Repository Analysis" className="w-full h-auto" />
+                    <div className="p-3 text-center text-sm font-medium border-t border-border">Repository Analysis</div>
+                  </div>
+                </CarouselItem>
+                <CarouselItem>
+                  <div className="rounded-lg overflow-hidden border border-border">
+                    <img src="/demo2.gif" alt="Rule Generation" className="w-full h-auto" />
+                    <div className="p-3 text-center text-sm font-medium border-t border-border">Rule Generation</div>
+                  </div>
+                </CarouselItem>
+                <CarouselItem>
+                  <div className="rounded-lg overflow-hidden border border-border">
+                    <img src="/demo3.gif" alt="Rule Management" className="w-full h-auto" />
+                    <div className="p-3 text-center text-sm font-medium border-t border-border">Rule Management</div>
+                  </div>
+                </CarouselItem>
+                <CarouselItem>
+                  <div className="rounded-lg overflow-hidden border border-border">
+                    <img src="/demo4.gif" alt="MCP Integration" className="w-full h-auto" />
+                    <div className="p-3 text-center text-sm font-medium border-t border-border">MCP Integration</div>
+                  </div>
+                </CarouselItem>
+              </CarouselContent>
+              <CarouselPrevious className="left-2" />
+              <CarouselNext className="right-2" />
+            </Carousel>
           </CardContent>
         </Card>
       </main>
