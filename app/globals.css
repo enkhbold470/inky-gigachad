@@ -164,3 +164,40 @@
   object-fit: contain;
   border-radius: var(--radius-sm);
 }
+
+.code-editor {
+  background: transparent;
+  color: var(--foreground);
+  font-family: var(--font-mono);
+  tab-size: 2;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.code-editor::placeholder {
+  color: var(--muted-foreground);
+  opacity: 0.6;
+}
+
+.code-editor:focus {
+  outline: none;
+}
+
+.code-editor::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.code-editor::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.code-editor::-webkit-scrollbar-thumb {
+  background: var(--muted-foreground);
+  border-radius: 4px;
+  opacity: 0.3;
+}
+
+.code-editor::-webkit-scrollbar-thumb:hover {
+  opacity: 0.5;
+}

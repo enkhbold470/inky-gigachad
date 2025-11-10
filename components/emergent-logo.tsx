@@ -15,8 +15,8 @@ export function EmergentLogo() {
       <Image
         src="/logo.jpg"
         alt="Emergent"
-        width={80}
-        height={32}
+        width={40}
+        height={40}
         className="emergent-logo-image"
       />
     </Link>

@@ -207,6 +207,74 @@ export async function updateRule(input: UpdateRuleInput) {
 }
 
 /**
+ * Get user's rules with repository information
+ */
+export async function getUserRulesWithRepositories() {
+  try {
+    const { userId } = await auth()
+    if (!userId) {
+      return { success: false, error: "Not authenticated" }
+    }
+
+    const user = await getOrCreateUser(userId)
+
+    const rules = await prisma.rule.findMany({
+      where: {
+        user_id: user.id,
+      },
+      orderBy: [
+        { created_at: "desc" },
+      ],
+      select: {
+        id: true,
+        name: true,
+        content: true,
+        version: true,
+        is_active: true,
+        repository_id: true,
+        created_at: true,
+        updated_at: true,
+      },
+    })
+
+    // Get repository IDs
+    const repositoryIds = rules
+      .map((r) => r.repository_id)
+      .filter((id): id is string => id !== null)
+
+    // Fetch repositories
+    const repositories = await prisma.repository.findMany({
+      where: {
+        id: { in: repositoryIds },
+        user_id: user.id,
+      },
+      select: {
+        id: true,
+        name: true,
+        full_name: true,
+        owner: true,
+        language: true,
+        html_url: true,
+      },
+    })
+
+    // Create a map for quick lookup
+    const repoMap = new Map(repositories.map((r) => [r.id, r]))
+
+    // Combine rules with repository info
+    const rulesWithRepos = rules.map((rule) => ({
+      ...rule,
+      repository: rule.repository_id ? repoMap.get(rule.repository_id) || null : null,
+    }))
+
+    return { success: true, data: rulesWithRepos }
+  } catch (error) {
+    console.error("Error fetching rules with repositories:", error)
+    return { success: false, error: error instanceof Error ? error.message : "Failed to fetch rules" }
+  }
+}
+
+/**
  * Get user's rules
  */
 export async function getUserRules(repositoryId?: string) {
