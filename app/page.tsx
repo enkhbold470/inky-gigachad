@@ -5,7 +5,7 @@ import { useUser } from "@clerk/nextjs"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/components/ui/carousel"
-import { Github, ArrowRight } from "lucide-react"
+import { Github, Plus, Settings } from "lucide-react"
 import { Header } from "@/components/header"
 
 export default function Home() {
@@ -28,20 +28,27 @@ export default function Home() {
           </CardHeader>
           <CardContent>
             <div className="flex flex-col sm:flex-row gap-4 mt-6">
-              {isLoaded && !user && (
-                <Button size="lg" className="w-full sm:w-auto" asChild>
+              <Button size="lg" className="w-full sm:w-auto" asChild>
+                <Link href={isLoaded && user ? "/onboard" : "/sign-up"}>
+                  <Plus className="mr-2 size-5" />
+                  Create New Account & Generate Rules
+                </Link>
+              </Button>
+              {isLoaded && user ? (
+                <Button variant="outline" size="lg" className="w-full sm:w-auto" asChild>
+                  <Link href="/dashboard">
+                    <Settings className="mr-2 size-5" />
+                    Manage Dashboard & Rules
+                  </Link>
+                </Button>
+              ) : (
+                <Button variant="outline" size="lg" className="w-full sm:w-auto" asChild>
                   <Link href="/sign-in">
                     <Github className="mr-2 size-5" />
-                    Sign in with GitHub
+                    Sign In to Manage Rules
                   </Link>
                 </Button>
               )}
-              <Button variant="outline" size="lg" className="w-full sm:w-auto" asChild>
-                <Link href="/onboard">
-                  <ArrowRight className="mr-2 size-5" />
-                  {isLoaded && user ? "Go to Dashboard" : "Try Demo"}
-                </Link>
-              </Button>
             </div>
           </CardContent>
         </Card>
