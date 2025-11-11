@@ -63,7 +63,7 @@ export default function RootLayout({
         >
           {children}
           <Toaster />
-          <EmergentLogo />
+          {/* <EmergentLogo /> */}
           <Analytics />
         </body>
       </html>
