@@ -1,129 +1,132 @@
-# Inky - Memory Layer for Personalized Coding
+# Inky Gigachad — Local MCP Memory for AI Coding Tools
 
-**Inky** helps developers maintain consistent coding styles across IDEs by analyzing GitHub repositories and generating personalized coding rules that integrate with AI coding assistants via MCP.
+**One command. One memory file. Every IDE.**
 
-## ✨ Features
+Inky is a **local-first MCP server** that saves your coding preferences, rules, and project memory in `~/.inky-gigachad/memory.json` — then shares them across **Cursor**, **Claude Code**, **Codex**, **Windsurf**, and any MCP-compatible tool.
 
-### Repository Analysis
-![Repository Analysis](public/demo1.gif)
-
-Connect GitHub, select repositories, and extract coding patterns automatically.
-
-### Rule Generation
-![Rule Generation](public/demo2.gif)
-
-AI-powered rule generation with visual progress tracking and markdown context integration.
-
-### Rule Management
-![Rule Management](public/demo3.gif)
-
-Create, edit, and manage coding rules with version control and semantic search.
-
-### MCP Integration
-![MCP Integration](public/demo4.gif)
-
-Seamless integration with Windsurf, Cursor, Claude Code, and CodeX via Model Context Protocol.
-
-## 🛠️ Tech Stack
-
-**Frontend**: Next.js 16, TypeScript, React 19, Tailwind CSS 4, Shadcn UI  
-**Backend**: Next.js Server Actions, Clerk Auth, PostgreSQL (Neon), Prisma  
-**AI/ML**: OpenAI (GPT-4, embeddings), Pinecone (vector search)  
-**Infrastructure**: pnpm, Vercel
-
-## 🚀 Quick Start
-
-### Prerequisites
-- Node.js 20+, pnpm
-- PostgreSQL (Neon), Clerk, Pinecone, OpenAI API key
-
-### Installation
+No Pinecone. No OpenAI. No cloud required.
 
 ```bash
-git clone <repository-url>
-cd inky-gigachad
-pnpm install
+npx -y inky-gigachad mcp
 ```
 
-### Environment Variables
+## Why developers use Inky
 
-Create `.env`:
-```env
-DATABASE_URL="postgresql://..."
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY="pk_..."
-CLERK_SECRET_KEY="sk_..."
-PINECONE_API_KEY="..."
-PINECONE_INDEX="inky-rules"
-OPENAI_API_KEY="sk-..."
-NEXT_PUBLIC_APP_URL="http://localhost:3000"
-```
+- **Cross-tool memory** — save once in Cursor, read the same context in Claude Code or Codex
+- **Local by default** — your data stays on your machine in plain JSON
+- **MCP-native** — drop-in config for modern AI coding assistants
+- **Zero API keys** — no vector DB, no LLM billing, no signup for the CLI
+- **Import existing rules** — pulls from `AGENTS.md`, `CLAUDE.md`, and `.cursor/rules`
 
-### Setup
+## 30-second setup
 
-```bash
-pnpm prisma generate
-pnpm prisma db push
-pnpm dev
-```
+### Cursor
 
-Visit [http://localhost:3000](http://localhost:3000)
+Add to `~/.cursor/mcp.json`:
 
-### Service Setup
-
-- **Clerk**: Create app, configure GitHub OAuth
-- **Pinecone**: Create index `inky-rules` (1536 dimensions, cosine metric)
-- **OpenAI**: Get API key from platform.openai.com
-
-## 🔌 MCP Integration
-
-Configure MCP server for Windsurf, Cursor, Claude Code, or CodeX:
-
-**HTTP Transport:**
-```json
-{
-  "mcpServers": {
-    "inky": {
-      "url": "https://api.inky.dev/api/mcp",
-      "headers": { "X-User-Id": "user_xxxxx" }
-    }
-  }
-}
-```
-
-**Stdio Transport:**
 ```json
 {
   "mcpServers": {
     "inky": {
       "command": "npx",
-      "args": ["-y", "inky-mcp-server"],
-      "env": {
-        "USER_ID": "user_xxxxx",
-        "INKY_API_URL": "https://api.inky.dev"
-      }
+      "args": ["-y", "inky-gigachad", "mcp"]
     }
   }
 }
 ```
 
-## 📚 Documentation
+### Claude Code
 
-- [Rule Generation](./docs/multistep-rule-generation.md)
-- [Pinecone Setup](./docs/pinecone.md)
-- [LLM Integration](./docs/llms-full-nextjs.md)
+Add to `~/.claude.json` under `mcpServers`:
 
-## 🚢 Deployment
+```json
+{
+  "mcpServers": {
+    "inky": {
+      "command": "npx",
+      "args": ["-y", "inky-gigachad", "mcp"]
+    }
+  }
+}
+```
 
-Deploy to Vercel:
-1. Push to GitHub
-2. Import in Vercel
-3. Add environment variables
-4. Deploy
+### Codex / Windsurf
 
-## 🤝 Contributing
+Same config shape — `command: npx`, `args: ["-y", "inky-gigachad", "mcp"]`.
 
-Follow TypeScript best practices, use functional React components, and maintain code style consistency.
+Restart your tool, then ask the agent to call `import_project_rules` or `save_memory`.
+
+## MCP tools
+
+| Tool | What it does |
+|------|----------------|
+| `save_memory` | Persist a durable preference (e.g. `coding-style`) |
+| `get_memory` | Fetch memory by key |
+| `list_memories` | List all saved memories |
+| `search_memories` | Local text search across memories |
+| `save_rule` | Save a coding rule for your assistants |
+| `list_rules` | List active rules |
+| `search_rules` | Search rules locally |
+| `import_project_rules` | Import `AGENTS.md`, `.cursor/rules`, etc. |
+| `memory_store_info` | Show path to your local memory file |
+| `delete_memory` / `delete_rule` | Remove entries |
+
+## Where data lives
+
+```
+~/.inky-gigachad/memory.json
+```
+
+Override with:
+
+```bash
+export INKY_DATA_DIR=/path/to/dir
+# or
+export INKY_MEMORY_PATH=/path/to/custom-memory.json
+```
+
+## Example workflow
+
+1. Run `npx -y inky-gigachad mcp` via your IDE MCP config
+2. Tell your agent: *"Use import_project_rules to load my repo rules"*
+3. Save durable prefs: *"Use save_memory with key typescript-style and content prefer functional components"*
+4. Switch to another IDE — same memory file, same context
+
+## Optional web dashboard
+
+A lightweight Next.js UI can browse and edit the same local memory file when you run it locally:
+
+```bash
+git clone <repository-url>
+cd inky-gigachad
+pnpm install
+pnpm dev
+```
+
+Rules are read/written to `~/.inky-gigachad/memory.json` — no database setup required.
+
+## Development
+
+```bash
+pnpm install
+pnpm build:mcp          # compile MCP CLI
+pnpm mcp                # run local MCP server (stdio)
+node bin/inky-gigachad.cjs help
+```
+
+No database. No migrations. Memory is a JSON file on disk.
+
+## Publish to npm
+
+```bash
+pnpm build:mcp
+npm publish
+```
+
+## Keywords
+
+`mcp` · `cursor` · `claude-code` · `codex` · `windsurf` · `coding-memory` · `local-first` · `developer-tools` · `ai-coding` · `agent-memory`
 
 ---
 
-**Inky** - Your coding memory, everywhere you code. 🚀
+**Inky Gigachad** — your coding memory, everywhere you code. Locally.

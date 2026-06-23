@@ -58,10 +58,8 @@ export default function Dashboard() {
     failedChunks?: number
     logs?: Array<{ level: string; message: string; timestamp: number }>
   }>({})
-  const [mcpConfig, setMcpConfig] = useState<string>("")
   const [mcpConfigStdio, setMcpConfigStdio] = useState<string>("")
   const [loadingMcpConfig, setLoadingMcpConfig] = useState(false)
-  const [mcpConfigMethod, setMcpConfigMethod] = useState<"http" | "stdio">("http")
   const [selectedTemplateForView, setSelectedTemplateForView] = useState<RuleTemplate | null>(null)
 
   const loadData = useCallback(async () => {
@@ -216,9 +214,8 @@ export default function Dashboard() {
   }
 
   const handleCopyMCPCode = () => {
-    const configToCopy = mcpConfigMethod === "http" ? mcpConfig : mcpConfigStdio
-    if (configToCopy) {
-      navigator.clipboard.writeText(configToCopy)
+    if (mcpConfigStdio) {
+      navigator.clipboard.writeText(mcpConfigStdio)
       toast.success("MCP server code copied to clipboard!")
     } else {
       toast.error("MCP configuration not loaded. Please try again.")
@@ -231,31 +228,11 @@ export default function Dashboard() {
     setLoadingMcpConfig(true)
     try {
       const result = await getMCPConfig()
-      if (result.success && result.data) {
-        // HTTP Transport config (Option 1)
-        const configJson = JSON.stringify(result.data.config, null, 2)
-        setMcpConfig(configJson)
-        
-        // Stdio Transport config (Option 2)
-        // Extract base URL from apiUrl (remove /api/mcp suffix)
-        const apiUrl = result.data.apiUrl || ""
-        const baseUrl = apiUrl.replace(/\/api\/mcp\/?$/, "") || "https://config-central-5.preview.emergentagent.com"
-        const stdioConfig = {
-          mcpServers: {
-            inky: {
-              command: "npx",
-              args: ["-y", "inky-mcp-server"],
-              env: {
-                USER_ID: result.data.userId,
-                INKY_API_URL: baseUrl,
-              },
-            },
-          },
-        }
-        const stdioConfigJson = JSON.stringify(stdioConfig, null, 2)
+      if (result.data?.stdioConfig) {
+        const stdioConfigJson = JSON.stringify(result.data.stdioConfig, null, 2)
         setMcpConfigStdio(stdioConfigJson)
       } else {
-        toast.error(result.error || "Failed to load MCP configuration")
+        toast.error("Failed to load MCP configuration")
       }
     } catch (error) {
       console.error("Error loading MCP config:", error)
@@ -267,11 +244,11 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (selectedTool && activeTab === "tools") {
-      if (!mcpConfig && !mcpConfigStdio && !loadingMcpConfig) {
+      if (!mcpConfigStdio && !loadingMcpConfig) {
         loadMCPConfig()
       }
     }
-  }, [activeTab, selectedTool, mcpConfig, mcpConfigStdio, loadingMcpConfig, loadMCPConfig])
+  }, [activeTab, selectedTool, mcpConfigStdio, loadingMcpConfig, loadMCPConfig])
 
   const handleFinish = async () => {
     if (!selectedTool) {
@@ -607,7 +584,7 @@ export default function Dashboard() {
                             <Button 
                               size="sm" 
                               onClick={handleCopyMCPCode}
-                              disabled={(!mcpConfig && !mcpConfigStdio) || loadingMcpConfig}
+                              disabled={!mcpConfigStdio || loadingMcpConfig}
                             >
                               <Copy className="size-4 mr-2" />
                               Copy
@@ -620,38 +597,15 @@ export default function Dashboard() {
                               <Loader2 className="size-6 animate-spin text-muted-foreground" />
                               <span className="ml-2 text-sm text-muted-foreground">Loading configuration...</span>
                             </div>
-                          ) : (mcpConfig || mcpConfigStdio) ? (
-                            <>
-                              {/* Configuration Method Selector */}
-                              <div className="mb-4">
-                                <Tabs value={mcpConfigMethod} onValueChange={(v) => setMcpConfigMethod(v as "http" | "stdio")}>
-                                  <TabsList className="grid w-full grid-cols-2">
-                                    <TabsTrigger value="http">Option 1: HTTP Transport</TabsTrigger>
-                                    <TabsTrigger value="stdio">Option 2: Stdio Transport</TabsTrigger>
-                                  </TabsList>
-                                  <TabsContent value="http" className="mt-4">
-                                    <div className="space-y-2">
-                                      <pre className="text-xs bg-muted p-4 rounded-lg overflow-x-auto">
-                                        {mcpConfig}
-                                      </pre>
-                                      <p className="text-xs text-muted-foreground">
-                                        Direct API access - Paste this into your {selectedTool} MCP configuration file
-                                      </p>
-                                    </div>
-                                  </TabsContent>
-                                  <TabsContent value="stdio" className="mt-4">
-                                    <div className="space-y-2">
-                                      <pre className="text-xs bg-muted p-4 rounded-lg overflow-x-auto">
-                                        {mcpConfigStdio}
-                                      </pre>
-                                      <p className="text-xs text-muted-foreground">
-                                        Using npm package - Paste this into your {selectedTool} MCP configuration file. Requires <code className="bg-muted px-1 rounded">inky-mcp-server</code> npm package.
-                                      </p>
-                                    </div>
-                                  </TabsContent>
-                                </Tabs>
-                              </div>
-                            </>
+                          ) : mcpConfigStdio ? (
+                            <div className="space-y-2">
+                              <pre className="text-xs bg-muted p-4 rounded-lg overflow-x-auto">
+                                {mcpConfigStdio}
+                              </pre>
+                              <p className="text-xs text-muted-foreground">
+                                100% local memory at ~/.inky-gigachad/memory.json — works in {selectedTool} with <code className="bg-muted px-1 rounded">npx -y inky-gigachad mcp</code>
+                              </p>
+                            </div>
                           ) : (
                             <div className="text-sm text-muted-foreground p-4">
                               Failed to load MCP configuration. Please refresh the page.
@@ -693,8 +647,8 @@ export default function Dashboard() {
                 { step: 1, label: "Scanning for markdown files", icon: FileText },
                 { step: 2, label: "Saving repositories", icon: Github },
                 { step: 3, label: "Loading markdown files", icon: FileText },
-                { step: 4, label: "Indexing to Pinecone", icon: Loader2 },
-                { step: 5, label: "Generating rules with RAG", icon: Loader2 },
+                { step: 4, label: "Indexing markdown locally", icon: Loader2 },
+                { step: 5, label: "Generating rules from docs", icon: Loader2 },
                 { step: 6, label: "Complete", icon: CheckCircle2 },
               ].map(({ step, label, icon: Icon }) => {
                 const isActive = progressStep === step
