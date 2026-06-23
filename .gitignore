@@ -46,3 +46,4 @@ lib/prisma
 prompt-list-for-emergent.md
 
 inky-mcp-server/
+/dist/

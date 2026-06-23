@@ -6,7 +6,7 @@ import { saveRepositorySchema, type SaveRepositoryInput } from "@/lib/validation
 import type { GitHubRepo } from "@/lib/github"
 import { z } from "zod"
 import { getMarkdownContextFromRepositories } from "@/lib/markdown-context"
-import { indexMarkdownFilesToPinecone, generateRulesWithRAG } from "@/lib/rag"
+import { generateRulesFromRepositoryContext, indexMarkdownFilesLocally } from "@/lib/rag"
 
 /**
  * Get or create user in database
@@ -223,12 +223,10 @@ export async function saveRepositories(repos: GitHubRepo[]) {
       logs: markdownContextResult.logs || [],
     }
 
-    // Step 2: Index markdown files to Pinecone
-    console.log("[saveRepositories] Indexing markdown files to Pinecone...")
-    const repositoryIds = savedRepos.map((r) => r.id)
+    // Step 2: Index markdown files locally (no vector DB)
+    console.log("[saveRepositories] Indexing markdown files locally...")
     const filesWithContent = markdownContextResult.filesWithContent || []
 
-    // Calculate chunks for each file before indexing
     const CHUNK_SIZE = 1000
     const CHUNK_OVERLAP = 200
     let totalChunks = 0
@@ -245,15 +243,13 @@ export async function saveRepositories(repos: GitHubRepo[]) {
     })
     processingDetails.totalChunks = totalChunks
 
-    const indexingResult = await indexMarkdownFilesToPinecone(
+    const indexingResult = await indexMarkdownFilesLocally(
       filesWithContent.filter(f => f.content.length > 0),
-      user.id,
-      repositoryIds,
       (level, message) => {
         processingDetails.logs?.push({ level, message, timestamp: Date.now() })
       }
     )
-    console.log("[saveRepositories] ✅ Indexed", indexingResult.indexed, "chunks to Pinecone")
+    console.log("[saveRepositories] ✅ Indexed", indexingResult.indexed, "markdown files locally")
     if (indexingResult.failed > 0) {
       console.warn("[saveRepositories] ⚠️ Failed to index", indexingResult.failed, "chunks")
     }
@@ -282,21 +278,14 @@ export async function saveRepositories(repos: GitHubRepo[]) {
       description: r.description,
     }))
 
-    console.log("[saveRepositories] Generating rules using RAG...")
+    console.log("[saveRepositories] Generating rules from repository markdown...")
     try {
-      const query = `Generate comprehensive coding rules based on these repositories: ${repoInfo.map(r => r.full_name).join(", ")}. Primary languages: ${uniqueLanguages.join(", ")}.`
-      
-      const ruleContent = await generateRulesWithRAG(
-        query,
-        user.id,
-        repositoryIds
+      const ruleContent = await generateRulesFromRepositoryContext(
+        repoInfo,
+        filesWithContent.map((file) => ({ path: file.path, content: file.content }))
       )
 
-      if (!ruleContent) {
-        throw new Error("No response from RAG")
-      }
-
-      console.log("[saveRepositories] ✅ Rules generated successfully using RAG")
+      console.log("[saveRepositories] ✅ Rules generated locally from markdown context")
 
       // Create generated rule
       const generatedRule = await prisma.rule.create({
