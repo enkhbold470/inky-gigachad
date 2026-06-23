@@ -94,15 +94,16 @@ export INKY_MEMORY_PATH=/path/to/custom-memory.json
 
 ## Optional web dashboard
 
-This repo also includes a Next.js dashboard for team rule management (Clerk + Postgres). The **recommended path for individuals is the local MCP CLI** above.
+A lightweight Next.js UI can browse and edit the same local memory file when you run it locally:
 
 ```bash
 git clone <repository-url>
 cd inky-gigachad
 pnpm install
-cp .env.example .env   # set DATABASE_URL + Clerk keys if using dashboard
 pnpm dev
 ```
+
+Rules are read/written to `~/.inky-gigachad/memory.json` — no database setup required.
 
 ## Development
 
@@ -112,6 +113,8 @@ pnpm build:mcp          # compile MCP CLI
 pnpm mcp                # run local MCP server (stdio)
 node bin/inky-gigachad.cjs help
 ```
+
+No database. No migrations. Memory is a JSON file on disk.
 
 ## Publish to npm
 
