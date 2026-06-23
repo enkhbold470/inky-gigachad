@@ -1,30 +1,13 @@
-# Claude / Coding Agent Notes
+# Claude / agent notes
 
-This repo is **inky-gigachad** — a local-first MCP memory server for Cursor, Claude Code, Codex, and Windsurf.
+Local MCP server — `npx -y inky-gigachad mcp`
 
-## Git commits — important
+Memory: `~/.inky-gigachad/memory.json`
 
-**Never add Cursor or bot co-authors to commits.**
+## Commits
 
-- Do **not** include `Co-authored-by: Cursor Agent <cursoragent@cursor.com>`
-- Do **not** include any `Co-authored-by` line for agents, bots, or cloud runners
-- Prefer normal commit messages with no `Co-authored-by:` trailer at all
-- If hooks append co-author metadata automatically, commit with `--no-verify` and confirm the message is clean before push
+Never add `Co-authored-by: Cursor Agent <cursoragent@cursor.com>`. No bot co-author lines.
 
-Check before push:
+## Scope
 
-```bash
-git log -1 --format=full
-```
-
-If you see `Co-authored-by: Cursor Agent` or `cursoragent@cursor.com`, amend or reword the commit and remove it.
-
-## Product focus
-
-- Main entrypoint: `npx -y inky-gigachad mcp`
-- Memory file: `~/.inky-gigachad/memory.json`
-- No Prisma, no Pinecone, no OpenAI required for the MCP CLI
-
-## Code conventions
-
-See [AGENTS.md](./AGENTS.md) for code style and architecture rules.
+This repo is **only** the MCP CLI. Keep changes minimal. See [AGENTS.md](./AGENTS.md).
