@@ -1,21 +1,52 @@
 {
   "name": "inky-gigachad",
-  "version": "0.1.0",
-  "private": true,
+  "version": "0.2.0",
+  "description": "Local-first MCP memory layer for Cursor, Claude Code, Codex, and Windsurf. Save coding rules once, reuse everywhere.",
+  "private": false,
+  "bin": {
+    "inky-gigachad": "./bin/inky-gigachad.cjs"
+  },
+  "files": [
+    "bin",
+    "dist",
+    "README.md"
+  ],
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "cursor",
+    "claude-code",
+    "codex",
+    "windsurf",
+    "coding-memory",
+    "ai-coding",
+    "developer-tools",
+    "local-first",
+    "coding-rules",
+    "agent-memory"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/inky-gigachad/inky-gigachad"
+  },
+  "license": "MIT",
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "prisma generate && next build",
+    "build": "pnpm build:mcp && prisma generate && next build",
+    "build:mcp": "tsc -p tsconfig.mcp.json",
     "start": "next start",
     "lint": "eslint",
     "postinstall": "prisma generate",
+    "prepublishOnly": "pnpm build:mcp",
     "seed": "tsx prisma/seed-cursor-rules.ts",
-    "seed:dev": "tsx prisma/seed-cursor-rules.ts"
+    "seed:dev": "tsx prisma/seed-cursor-rules.ts",
+    "mcp": "node bin/inky-gigachad.cjs mcp"
   },
   "dependencies": {
     "@clerk/nextjs": "^6.34.5",
     "@clerk/themes": "^2.4.33",
     "@hookform/resolvers": "^5.2.2",
-    "@pinecone-database/pinecone": "^3.0.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@prisma/client": "6.19.0",
     "@radix-ui/react-accordion": "^1.2.12",
     "@radix-ui/react-alert-dialog": "^1.1.15",
@@ -53,7 +84,6 @@
     "lucide-react": "^0.553.0",
     "next": "16.0.7",
     "next-themes": "^0.4.6",
-    "openai": "^6.8.1",
     "react": "19.2.0",
     "react-day-picker": "^9.11.1",
     "react-dom": "19.2.0",
@@ -77,5 +107,8 @@
     "tsx": "^4.19.2",
     "tw-animate-css": "^1.4.0",
     "typescript": "^5"
+  },
+  "engines": {
+    "node": ">=18"
   }
 }

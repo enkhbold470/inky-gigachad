@@ -1,28 +1,10 @@
 "use server"
 
 import { auth } from "@clerk/nextjs/server"
-import { prisma } from "@/lib/prisma"
 
 /**
- * Get or create user in database
- */
-async function getOrCreateUser(clerkId: string) {
-  let user = await prisma.user.findUnique({
-    where: { clerk_id: clerkId },
-  })
-
-  if (!user) {
-    user = await prisma.user.create({
-      data: { clerk_id: clerkId },
-    })
-  }
-
-  return user
-}
-
-/**
- * Get MCP server configuration JSON for the authenticated user
- * Uses userId for authentication instead of API tokens
+ * Get MCP server configuration for local stdio transport.
+ * Recommended for Cursor, Claude Code, Codex, and Windsurf.
  */
 export async function getMCPConfig() {
   try {
@@ -31,10 +13,6 @@ export async function getMCPConfig() {
       return { success: false, error: "Not authenticated" }
     }
 
-    const user = await getOrCreateUser(userId)
-
-    // Get the base URL for the API
-    // Priority: NEXT_PUBLIC_APP_URL > VERCEL_URL > fallback
     let baseUrl = process.env.NEXT_PUBLIC_APP_URL
     if (!baseUrl && process.env.VERCEL_URL) {
       baseUrl = `https://${process.env.VERCEL_URL}`
@@ -42,13 +20,28 @@ export async function getMCPConfig() {
     if (!baseUrl) {
       baseUrl = "http://localhost:3000"
     }
-    // Ensure no trailing slash
     baseUrl = baseUrl.replace(/\/$/, "")
 
     return {
       success: true,
       data: {
         config: {
+          mcpServers: {
+            inky: {
+              command: "npx",
+              args: ["-y", "inky-gigachad", "mcp"],
+            },
+          },
+        },
+        stdioConfig: {
+          mcpServers: {
+            inky: {
+              command: "npx",
+              args: ["-y", "inky-gigachad", "mcp"],
+            },
+          },
+        },
+        httpConfig: {
           mcpServers: {
             inky: {
               url: `${baseUrl}/api/mcp`,
@@ -60,6 +53,7 @@ export async function getMCPConfig() {
         },
         userId,
         apiUrl: `${baseUrl}/api/mcp`,
+        memoryPath: "~/.inky-gigachad/memory.json",
       },
     }
   } catch (error) {
@@ -70,4 +64,3 @@ export async function getMCPConfig() {
     }
   }
 }
-

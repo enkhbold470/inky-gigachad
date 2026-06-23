@@ -201,3 +201,69 @@
 .code-editor::-webkit-scrollbar-thumb:hover {
   opacity: 0.5;
 }
+
+.page-landing {
+  min-height: calc(100vh - 4rem);
+}
+
+.install-block {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--muted);
+  padding: 1rem;
+}
+
+.install-block-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+  margin-bottom: 0.5rem;
+}
+
+.install-block-command {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 0.95rem;
+  color: var(--foreground);
+}
+
+.mcp-config-preview {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  background: var(--muted);
+  border-radius: var(--radius-md);
+  padding: 1rem;
+  overflow-x: auto;
+  white-space: pre-wrap;
+}
+
+.feature-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+}
+
+@media (min-width: 768px) {
+  .feature-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.how-it-works-list {
+  list-style: decimal;
+  padding-left: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  color: var(--muted-foreground);
+}
+
+.how-it-works-list code {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  background: var(--muted);
+  padding: 0.1rem 0.35rem;
+  border-radius: var(--radius-sm);
+}
