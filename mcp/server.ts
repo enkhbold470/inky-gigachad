@@ -22,7 +22,7 @@ export async function startMcpServer(): Promise<void> {
   const server = new McpServer(
     {
       name: "inky-gigachad",
-      version: "0.2.0",
+      version: "0.3.0",
     },
     {
       instructions:

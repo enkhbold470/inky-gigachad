@@ -2,7 +2,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from "node:fs"
 import { join } from "node:path"
 import { saveMemory, saveRule } from "./store"
 
-const RULE_FILE_NAMES = new Set([
+const ROOT_MEMORY_FILES = new Set([
   "agents.md",
   "claude.md",
   "cursor.md",
@@ -38,16 +38,18 @@ export function importProjectRules(projectDir = process.cwd()): {
   imported_memories: number
   files: string[]
 } {
-  const candidateDirs = [
-    join(projectDir, ".cursor", "rules"),
-    join(projectDir, ".inky"),
-    projectDir,
-  ]
-
   const files = new Set<string>()
-  for (const dir of candidateDirs) {
+
+  for (const dir of [join(projectDir, ".cursor", "rules"), join(projectDir, ".inky")]) {
     for (const file of walkMarkdownFiles(dir)) {
       files.add(file)
+    }
+  }
+
+  if (existsSync(projectDir)) {
+    for (const entry of readdirSync(projectDir)) {
+      if (!ROOT_MEMORY_FILES.has(entry.toLowerCase())) continue
+      files.add(join(projectDir, entry))
     }
   }
 
@@ -61,7 +63,7 @@ export function importProjectRules(projectDir = process.cwd()): {
     const fileName = filePath.split("/").pop()?.toLowerCase() ?? ""
     const relativePath = filePath.replace(`${projectDir}/`, "")
 
-    if (RULE_FILE_NAMES.has(fileName)) {
+    if (ROOT_MEMORY_FILES.has(fileName)) {
       saveMemory({
         key: fileName.replace(/\.md$/i, ""),
         content,
