@@ -12,18 +12,9 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { getUserRulesWithRepositories, updateRule, deleteRule } from "@/app/actions/rule_actions"
-import { ExternalLink, Code, Calendar, Edit, Trash2, Loader2, Copy, Check } from "lucide-react"
+import { Code, Calendar, Edit, Trash2, Loader2, Copy, Check } from "lucide-react"
 import Link from "next/link"
 import { toast } from "sonner"
-
-interface Repository {
-  id: string
-  name: string
-  full_name: string
-  owner: string
-  language: string | null
-  html_url: string
-}
 
 interface Rule {
   id: string
@@ -31,10 +22,10 @@ interface Rule {
   content: string
   version: number
   is_active: boolean
-  repository_id: string | null
+  source: string | null
+  tags?: string[]
   created_at: Date
   updated_at: Date
-  repository: Repository | null
 }
 
 export default function Dashboard() {
@@ -274,10 +265,10 @@ export default function Dashboard() {
                     </div>
                   </div>
                   <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-                    {rule.repository && (
+                    {rule.source && (
                       <Badge variant="secondary" className="text-xs">
                         <Code className="size-3 mr-1" />
-                        {rule.repository.full_name.split('/')[1]}
+                        {rule.source}
                       </Badge>
                     )}
                     <Badge variant={rule.is_active ? "default" : "outline"} className="text-xs">
@@ -302,7 +293,7 @@ export default function Dashboard() {
           <DialogHeader>
             <DialogTitle className="text-lg sm:text-xl">Edit Rule</DialogTitle>
             <DialogDescription className="text-sm">
-              Update your rule details. Changes will create a new version.
+              Update your rule details. Changes are saved to ~/.inky-gigachad/memory.json.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4 overflow-y-auto flex-1">
@@ -362,18 +353,10 @@ export default function Dashboard() {
             </div>
             {selectedRule && (
               <div className="flex flex-wrap items-center gap-2 pt-2 border-t">
-                {selectedRule.repository && (
+                {selectedRule.source && (
                   <Badge variant="secondary" className="text-xs">
                     <Code className="size-3 mr-1" />
-                    <a
-                      href={selectedRule.repository.html_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="hover:underline flex items-center gap-1"
-                    >
-                      {selectedRule.repository.full_name}
-                      <ExternalLink className="size-3" />
-                    </a>
+                    {selectedRule.source}
                   </Badge>
                 )}
                 <Badge variant={selectedRule.is_active ? "default" : "outline"} className="text-xs">

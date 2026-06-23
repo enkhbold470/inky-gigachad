@@ -164,6 +164,33 @@ export function listRules(): RuleEntry[] {
   return loadStore().rules.filter((rule) => rule.is_active)
 }
 
+export function listAllRules(): RuleEntry[] {
+  return loadStore().rules
+}
+
+export function getRuleById(id: string): RuleEntry | null {
+  return loadStore().rules.find((rule) => rule.id === id) ?? null
+}
+
+export function updateRuleById(
+  id: string,
+  input: { name?: string; content?: string; is_active?: boolean; tags?: string[] }
+): RuleEntry | null {
+  const store = loadStore()
+  const index = store.rules.findIndex((rule) => rule.id === id)
+  if (index < 0) return null
+
+  const now = new Date().toISOString()
+  const updated: RuleEntry = {
+    ...store.rules[index],
+    ...input,
+    updated_at: now,
+  }
+  store.rules[index] = updated
+  saveStore(store)
+  return updated
+}
+
 export function deleteRule(nameOrId: string): boolean {
   const store = loadStore()
   const before = store.rules.length

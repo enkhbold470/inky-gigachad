@@ -1,144 +1,56 @@
 "use server"
 
-import { auth } from "@clerk/nextjs/server"
-import { prisma } from "@/lib/prisma"
-import { z } from "zod"
+import { readdirSync, readFileSync } from "node:fs"
+import { join } from "node:path"
+import type { RuleTemplate } from "@/lib/types"
 
-const createTemplateSchema = z.object({
-  name: z.string().min(1).max(200),
-  description: z.string().optional(),
-  content: z.string().min(1),
-  category: z.string().optional(),
-  is_public: z.boolean().default(true),
-})
+function loadBuiltInTemplates(): RuleTemplate[] {
+  const rulesDir = join(process.cwd(), "rules")
+  const files = readdirSync(rulesDir).filter((file) => file.endsWith(".mdc") || file.endsWith(".md"))
 
-const updateTemplateSchema = z.object({
-  id: z.string(),
-  name: z.string().min(1).max(200).optional(),
-  description: z.string().optional(),
-  content: z.string().min(1).optional(),
-  category: z.string().optional(),
-  is_public: z.boolean().optional(),
-})
+  return files.map((file) => {
+    const content = readFileSync(join(rulesDir, file), "utf8")
+    const slug = file.replace(/\.(mdc|md)$/i, "")
+    const name = slug
+      .split("-")
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(" ")
 
-/**
- * Create a rule template
- */
-export async function createTemplate(input: z.infer<typeof createTemplateSchema>) {
-  try {
-    const { userId } = await auth()
-    if (!userId) {
-      return { success: false, error: "Not authenticated" }
+    return {
+      id: slug,
+      name,
+      description: `Built-in ${name} template`,
+      content,
+      category: "Built-in",
+      author: "Inky",
+      x_account: null,
+      created_at: new Date(),
     }
-
-    const validated = createTemplateSchema.parse(input)
-
-    const template = await prisma.ruleTemplate.create({
-      data: validated,
-      select: {
-        id: true,
-        name: true,
-        description: true,
-        content: true,
-        category: true,
-        author: true,
-        x_account: true,
-        is_public: true,
-        created_at: true,
-      },
-    })
-
-    return { success: true, data: template }
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return { success: false, error: "Validation failed", details: error.issues }
-    }
-    console.error("Error creating template:", error)
-    return { success: false, error: error instanceof Error ? error.message : "Failed to create template" }
-  }
+  })
 }
 
-/**
- * Get all public templates
- */
 export async function getPublicTemplates(category?: string) {
-  console.log("[getPublicTemplates] Server action called")
-  console.log("[getPublicTemplates] Category:", category || "none")
-  
   try {
-    console.log("[getPublicTemplates] Fetching templates from database...")
-    const templates = await prisma.ruleTemplate.findMany({
-      where: {
-        is_public: true,
-        ...(category ? { category } : {}),
-      },
-      orderBy: { created_at: "desc" },
-      select: {
-        id: true,
-        name: true,
-        description: true,
-        content: true,
-        category: true,
-        author: true,
-        x_account: true,
-        created_at: true,
-      },
-    })
-
-    console.log("[getPublicTemplates] ✅ Found", templates.length, "templates")
+    const templates = loadBuiltInTemplates().filter((template) =>
+      category ? template.category === category : true
+    )
     return { success: true, data: templates }
   } catch (error) {
-    console.error("[getPublicTemplates] ✗ Error fetching templates:", error)
-    return { success: false, error: error instanceof Error ? error.message : "Failed to fetch templates" }
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to fetch templates",
+    }
   }
 }
 
-/**
- * Get template by ID
- */
 export async function getTemplateById(templateId: string) {
   try {
-    const template = await prisma.ruleTemplate.findUnique({
-      where: { id: templateId },
-      select: {
-        id: true,
-        name: true,
-        description: true,
-        content: true,
-        category: true,
-        author: true,
-        x_account: true,
-        is_public: true,
-        created_at: true,
-      },
-    })
-
+    const template = loadBuiltInTemplates().find((entry) => entry.id === templateId)
     if (!template) {
       return { success: false, error: "Template not found" }
     }
-
     return { success: true, data: template }
   } catch (error) {
-    console.error("Error fetching template:", error)
     return { success: false, error: error instanceof Error ? error.message : "Failed to fetch template" }
   }
 }
-
-/**
- * Load templates from emergent/rules directory
- */
-export async function loadEmergentTemplates() {
-  console.log("[loadEmergentTemplates] Server action called")
-  
-  try {
-    // In serverless environments, we can't use fs directly
-    // Templates should be loaded at build time or stored in database
-    // For now, this is a placeholder that can be enhanced
-    console.log("[loadEmergentTemplates] ⚠️ Placeholder implementation - returning empty array")
-    return { success: true, data: [] }
-  } catch (error) {
-    console.error("[loadEmergentTemplates] ✗ Error loading emergent templates:", error)
-    return { success: false, error: error instanceof Error ? error.message : "Failed to load templates" }
-  }
-}
-
