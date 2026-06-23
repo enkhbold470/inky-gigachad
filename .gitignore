@@ -42,7 +42,9 @@ next-env.d.ts
 
 # prisma
 lib/prisma
+prisma/
 
 prompt-list-for-emergent.md
 
 inky-mcp-server/
+/dist/
