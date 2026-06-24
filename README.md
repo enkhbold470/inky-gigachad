@@ -1,132 +1,51 @@
-# Inky Gigachad — Local MCP Memory for AI Coding Tools
+# inky-gigachad
 
-**One command. One memory file. Every IDE.**
+Local MCP memory shared across Cursor, Claude Code, Codex, and Windsurf.
 
-Inky is a **local-first MCP server** that saves your coding preferences, rules, and project memory in `~/.inky-gigachad/memory.json` — then shares them across **Cursor**, **Claude Code**, **Codex**, **Windsurf**, and any MCP-compatible tool.
-
-No Pinecone. No OpenAI. No cloud required.
+## With npm (after publish)
 
 ```bash
 npx -y inky-gigachad mcp
 ```
 
-## Why developers use Inky
+> Package is **not on npm yet**. See [PUBLISH.md](./PUBLISH.md) to publish, or use local install below.
 
-- **Cross-tool memory** — save once in Cursor, read the same context in Claude Code or Codex
-- **Local by default** — your data stays on your machine in plain JSON
-- **MCP-native** — drop-in config for modern AI coding assistants
-- **Zero API keys** — no vector DB, no LLM billing, no signup for the CLI
-- **Import existing rules** — pulls from `AGENTS.md`, `CLAUDE.md`, and `.cursor/rules`
-
-## 30-second setup
-
-### Cursor
-
-Add to `~/.cursor/mcp.json`:
-
-```json
-{
-  "mcpServers": {
-    "inky": {
-      "command": "npx",
-      "args": ["-y", "inky-gigachad", "mcp"]
-    }
-  }
-}
-```
-
-### Claude Code
-
-Add to `~/.claude.json` under `mcpServers`:
-
-```json
-{
-  "mcpServers": {
-    "inky": {
-      "command": "npx",
-      "args": ["-y", "inky-gigachad", "mcp"]
-    }
-  }
-}
-```
-
-### Codex / Windsurf
-
-Same config shape — `command: npx`, `args: ["-y", "inky-gigachad", "mcp"]`.
-
-Restart your tool, then ask the agent to call `import_project_rules` or `save_memory`.
-
-## MCP tools
-
-| Tool | What it does |
-|------|----------------|
-| `save_memory` | Persist a durable preference (e.g. `coding-style`) |
-| `get_memory` | Fetch memory by key |
-| `list_memories` | List all saved memories |
-| `search_memories` | Local text search across memories |
-| `save_rule` | Save a coding rule for your assistants |
-| `list_rules` | List active rules |
-| `search_rules` | Search rules locally |
-| `import_project_rules` | Import `AGENTS.md`, `.cursor/rules`, etc. |
-| `memory_store_info` | Show path to your local memory file |
-| `delete_memory` / `delete_rule` | Remove entries |
-
-## Where data lives
-
-```
-~/.inky-gigachad/memory.json
-```
-
-Override with:
+## Without npm (works now)
 
 ```bash
-export INKY_DATA_DIR=/path/to/dir
-# or
-export INKY_MEMORY_PATH=/path/to/custom-memory.json
-```
-
-## Example workflow
-
-1. Run `npx -y inky-gigachad mcp` via your IDE MCP config
-2. Tell your agent: *"Use import_project_rules to load my repo rules"*
-3. Save durable prefs: *"Use save_memory with key typescript-style and content prefer functional components"*
-4. Switch to another IDE — same memory file, same context
-
-## Optional web dashboard
-
-A lightweight Next.js UI can browse and edit the same local memory file when you run it locally:
-
-```bash
-git clone <repository-url>
+git clone https://github.com/enkhbold470/inky-gigachad
 cd inky-gigachad
-pnpm install
-pnpm dev
+pnpm install && pnpm build
+pnpm mcp
 ```
 
-Rules are read/written to `~/.inky-gigachad/memory.json` — no database setup required.
+Memory file: `~/.inky-gigachad/memory.json`
 
-## Development
+## Config
+
+```json
+{
+  "mcpServers": {
+    "inky": {
+      "command": "npx",
+      "args": ["-y", "inky-gigachad", "mcp"]
+    }
+  }
+}
+```
+
+Use `"command": "node", "args": ["/absolute/path/to/inky-gigachad/bin/inky-gigachad.cjs", "mcp"]` before npm publish.
+
+## Tools
+
+`save_memory` · `get_memory` · `list_memories` · `search_memories` · `save_rule` · `list_rules` · `search_rules` · `import_project_rules` · `memory_store_info` · `delete_memory` · `delete_rule`
+
+## Dev / test
 
 ```bash
 pnpm install
-pnpm build:mcp          # compile MCP CLI
-pnpm mcp                # run local MCP server (stdio)
-node bin/inky-gigachad.cjs help
+pnpm build
+pnpm test          # smoke + all 11 tools + local pack install
+pnpm test:tools    # human-like test every MCP tool
+pnpm mcp
 ```
-
-No database. No migrations. Memory is a JSON file on disk.
-
-## Publish to npm
-
-```bash
-pnpm build:mcp
-npm publish
-```
-
-## Keywords
-
-`mcp` · `cursor` · `claude-code` · `codex` · `windsurf` · `coding-memory` · `local-first` · `developer-tools` · `ai-coding` · `agent-memory`
-
----
-
-**Inky Gigachad** — your coding memory, everywhere you code. Locally.
