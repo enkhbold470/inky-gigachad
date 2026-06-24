@@ -23,11 +23,17 @@
     "local-first"
   ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/enkhbold470/inky-gigachad.git"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "prepublishOnly": "pnpm build",
     "mcp": "node bin/inky-gigachad.cjs mcp",
-    "test": "node scripts/smoke-test.mjs"
+    "test": "node scripts/smoke-test.mjs && node scripts/tools-test.mjs && node scripts/local-install-test.mjs",
+    "test:tools": "node scripts/tools-test.mjs",
+    "test:pack": "node scripts/local-install-test.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
